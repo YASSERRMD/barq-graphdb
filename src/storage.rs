@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::agent::DecisionRecord;
-use crate::vector::{LinearVectorIndex, VectorIndex};
+use crate::vector::{HnswVectorIndex, VectorIndex};
 use crate::{Edge, Node, NodeId};
 
 /// Type alias for the node storage map.
@@ -136,8 +136,8 @@ impl BarqGraphDb {
             (HashMap::new(), HashMap::new(), HashMap::new(), Vec::new())
         };
 
-        // Build vector index from loaded vectors
-        let mut vector_index = Box::new(LinearVectorIndex::new());
+        // Build vector index from loaded vectors (Phase 3: HNSW)
+        let mut vector_index = Box::new(HnswVectorIndex::new(1_000_000));
         for (id, embedding) in &vectors {
             vector_index.insert(*id, embedding);
         }
@@ -555,7 +555,13 @@ impl BarqGraphDb {
 
     /// Gets the embedding for a node if it exists.
     pub fn get_embedding(&self, id: NodeId) -> Option<&[f32]> {
-        self.vector_index.get(id)
+        self.nodes.get(&id).and_then(|n| {
+            if n.embedding.is_empty() {
+                None
+            } else {
+                Some(n.embedding.as_slice())
+            }
+        })
     }
 
     /// Performs a hybrid query combining vector similarity and graph distance.
@@ -643,8 +649,13 @@ impl BarqGraphDb {
         let mut results: Vec<HybridResult> = node_info
             .iter()
             .filter_map(|(&node_id, (graph_dist, path))| {
-                // Get embedding for this node
-                let embedding = self.vector_index.get(node_id)?;
+                // Get embedding for this node from authoritative storage
+                let node = self.nodes.get(&node_id)?;
+                let embedding = if node.embedding.is_empty() {
+                    return None;
+                } else {
+                    node.embedding.as_slice()
+                };
 
                 // Skip if dimensions don't match
                 if embedding.len() != query_embedding.len() {

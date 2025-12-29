@@ -7,6 +7,9 @@ use std::collections::HashMap;
 
 use crate::NodeId;
 
+pub mod hnsw;
+pub use hnsw::HnswVectorIndex;
+
 /// Trait for vector index implementations.
 ///
 /// Different implementations can provide various trade-offs between
@@ -42,9 +45,6 @@ pub trait VectorIndex: Send + Sync {
 
     /// Checks if a node exists in the index.
     fn contains(&self, id: NodeId) -> bool;
-
-    /// Gets the embedding for a node if it exists.
-    fn get(&self, id: NodeId) -> Option<&[f32]>;
 }
 
 /// Computes the L2 (Euclidean) distance between two vectors.
@@ -163,10 +163,6 @@ impl VectorIndex for LinearVectorIndex {
     fn contains(&self, id: NodeId) -> bool {
         self.vectors.contains_key(&id)
     }
-
-    fn get(&self, id: NodeId) -> Option<&[f32]> {
-        self.vectors.get(&id).map(|v| v.as_slice())
-    }
 }
 
 #[cfg(test)]
@@ -231,9 +227,9 @@ mod tests {
         let embedding = vec![0.1, 0.2, 0.3];
         index.insert(1, &embedding);
 
-        let retrieved = index.get(1).unwrap();
+        let retrieved = index.vectors.get(&1).unwrap();
         assert_eq!(retrieved, &embedding);
-        assert!(index.get(999).is_none());
+        assert!(index.vectors.get(&999).is_none());
     }
 
     #[test]
