@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::agent::DecisionRecord;
-use crate::vector::{HnswVectorIndex, VectorIndex};
+use crate::vector::{HnswVectorIndex, LinearVectorIndex, VectorIndex};
 use crate::{Edge, Node, NodeId};
 
 /// Type alias for the node storage map.
@@ -29,11 +29,19 @@ type VectorMap = HashMap<NodeId, Vec<f32>>;
 /// Type alias for WAL load result.
 type WalLoadResult = (NodeMap, AdjacencyMap, VectorMap, Vec<DecisionRecord>);
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum IndexType {
+    Linear,
+    Hnsw,
+}
+
 /// Configuration options for opening a database.
 #[derive(Debug, Clone)]
 pub struct DbOptions {
     /// Path to the database directory.
     pub path: PathBuf,
+    /// Type of vector index to use.
+    pub index_type: IndexType,
 }
 
 impl DbOptions {
@@ -47,7 +55,10 @@ impl DbOptions {
     ///
     /// A new `DbOptions` instance.
     pub fn new(path: PathBuf) -> Self {
-        Self { path }
+        Self { 
+            path,
+            index_type: IndexType::Hnsw, 
+        }
     }
 }
 
@@ -136,8 +147,11 @@ impl BarqGraphDb {
             (HashMap::new(), HashMap::new(), HashMap::new(), Vec::new())
         };
 
-        // Build vector index from loaded vectors (Phase 3: HNSW)
-        let mut vector_index = Box::new(HnswVectorIndex::new(1_000_000));
+        // Build vector index based on configuration
+        let mut vector_index: Box<dyn VectorIndex> = match opts.index_type {
+            IndexType::Linear => Box::new(LinearVectorIndex::new()),
+            IndexType::Hnsw => Box::new(HnswVectorIndex::new(1_000_000)),
+        };
         for (id, embedding) in &vectors {
             vector_index.insert(*id, embedding);
         }

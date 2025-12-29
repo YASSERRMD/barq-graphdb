@@ -57,6 +57,10 @@ name = "barq_complete_suite"
 harness = false
 
 [[bench]]
+name = "phase3_hnsw"
+harness = false
+
+[[bench]]
 name = "real_model_suite"
 harness = false
 
