@@ -13,7 +13,16 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::{Node, NodeId};
+use crate::{Edge, Node, NodeId};
+
+/// Type alias for the node storage map.
+type NodeMap = HashMap<NodeId, Node>;
+
+/// Type alias for the adjacency list.
+type AdjacencyMap = HashMap<NodeId, Vec<NodeId>>;
+
+/// Type alias for WAL load result.
+type WalLoadResult = (NodeMap, AdjacencyMap);
 
 /// Configuration options for opening a database.
 #[derive(Debug, Clone)]
@@ -39,11 +48,18 @@ impl DbOptions {
 
 /// WAL record kinds for different operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "data")]
+#[serde(tag = "kind")]
 enum WalRecord {
     /// A node was added or updated.
     #[serde(rename = "node")]
-    Node(Node),
+    Node { data: Node },
+    /// An edge was added between nodes.
+    #[serde(rename = "edge")]
+    Edge {
+        from: NodeId,
+        to: NodeId,
+        edge_type: String,
+    },
 }
 
 /// The main database struct providing storage operations.
@@ -57,6 +73,8 @@ pub struct BarqGraphDb {
     wal: File,
     /// In-memory node storage indexed by NodeId.
     nodes: HashMap<NodeId, Node>,
+    /// Adjacency list for graph traversal.
+    adjacency: HashMap<NodeId, Vec<NodeId>>,
 }
 
 impl BarqGraphDb {
@@ -97,10 +115,10 @@ impl BarqGraphDb {
         let wal_path = opts.path.join("wal.log");
 
         // Load existing records if WAL exists
-        let nodes = if wal_path.exists() {
+        let (nodes, adjacency) = if wal_path.exists() {
             Self::load_wal(&wal_path).with_context(|| "Failed to load WAL")?
         } else {
-            HashMap::new()
+            (HashMap::new(), HashMap::new())
         };
 
         // Open WAL file for appending
@@ -114,6 +132,7 @@ impl BarqGraphDb {
             options: opts,
             wal,
             nodes,
+            adjacency,
         })
     }
 
@@ -126,12 +145,13 @@ impl BarqGraphDb {
     /// # Returns
     ///
     /// A HashMap of nodes loaded from the WAL.
-    fn load_wal(wal_path: &PathBuf) -> Result<HashMap<NodeId, Node>> {
+    fn load_wal(wal_path: &PathBuf) -> Result<WalLoadResult> {
         let file = File::open(wal_path)
             .with_context(|| format!("Failed to open WAL for reading: {:?}", wal_path))?;
 
         let reader = BufReader::new(file);
         let mut nodes = HashMap::new();
+        let mut adjacency: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
 
         for (line_num, line_result) in reader.lines().enumerate() {
             let line =
@@ -146,13 +166,22 @@ impl BarqGraphDb {
                 .with_context(|| format!("Failed to parse WAL record at line {}", line_num + 1))?;
 
             match record {
-                WalRecord::Node(node) => {
+                WalRecord::Node { data: node } => {
+                    // Rebuild adjacency from node edges
+                    for edge in &node.edges {
+                        adjacency.entry(edge.from).or_default().push(edge.to);
+                        adjacency.entry(edge.to).or_default();
+                    }
                     nodes.insert(node.id, node);
+                }
+                WalRecord::Edge { from, to, .. } => {
+                    adjacency.entry(from).or_default().push(to);
+                    adjacency.entry(to).or_default();
                 }
             }
         }
 
-        Ok(nodes)
+        Ok((nodes, adjacency))
     }
 
     /// Appends a node to the database.
@@ -188,7 +217,7 @@ impl BarqGraphDb {
     /// db.append_node(node).unwrap();
     /// ```
     pub fn append_node(&mut self, node: Node) -> Result<()> {
-        let record = WalRecord::Node(node.clone());
+        let record = WalRecord::Node { data: node.clone() };
 
         // Serialize to JSON
         let json =
@@ -199,6 +228,12 @@ impl BarqGraphDb {
 
         // Flush to ensure durability
         self.wal.flush().with_context(|| "Failed to flush WAL")?;
+
+        // Rebuild adjacency from node edges
+        for edge in &node.edges {
+            self.adjacency.entry(edge.from).or_default().push(edge.to);
+            self.adjacency.entry(edge.to).or_default();
+        }
 
         // Update in-memory index
         self.nodes.insert(node.id, node);
@@ -243,6 +278,146 @@ impl BarqGraphDb {
     /// A vector of references to all nodes.
     pub fn list_nodes(&self) -> Vec<&Node> {
         self.nodes.values().collect()
+    }
+
+    /// Adds a directed edge between two nodes.
+    ///
+    /// The edge is written to the WAL for durability and the adjacency
+    /// list is updated for fast neighbor lookups.
+    ///
+    /// # Arguments
+    ///
+    /// * `from` - Source node ID
+    /// * `to` - Target node ID
+    /// * `edge_type` - Type/label of the edge
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or an error.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use barq_graphdb::storage::{BarqGraphDb, DbOptions};
+    /// use barq_graphdb::Node;
+    /// use std::path::PathBuf;
+    ///
+    /// let opts = DbOptions::new(PathBuf::from("./my_db"));
+    /// let mut db = BarqGraphDb::open(opts).unwrap();
+    /// db.add_edge(1, 2, "CALLS").unwrap();
+    /// ```
+    pub fn add_edge(&mut self, from: NodeId, to: NodeId, edge_type: &str) -> Result<()> {
+        let record = WalRecord::Edge {
+            from,
+            to,
+            edge_type: edge_type.to_string(),
+        };
+
+        // Serialize to JSON
+        let json =
+            serde_json::to_string(&record).with_context(|| "Failed to serialize edge to JSON")?;
+
+        // Append to WAL
+        writeln!(self.wal, "{}", json).with_context(|| "Failed to write edge to WAL")?;
+
+        // Flush to ensure durability
+        self.wal.flush().with_context(|| "Failed to flush WAL")?;
+
+        // Update adjacency list
+        self.adjacency.entry(from).or_default().push(to);
+        self.adjacency.entry(to).or_default();
+
+        // Also update the node's edges if the node exists
+        if let Some(node) = self.nodes.get_mut(&from) {
+            node.edges.push(Edge {
+                from,
+                to,
+                edge_type: edge_type.to_string(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Returns the neighbors (outgoing edges) of a node.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Node ID to look up
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing a slice of neighbor IDs, or `None` if
+    /// the node doesn't exist in the adjacency list.
+    pub fn neighbors(&self, id: NodeId) -> Option<&[NodeId]> {
+        self.adjacency.get(&id).map(|v| v.as_slice())
+    }
+
+    /// Performs BFS traversal from a start node up to a maximum depth.
+    ///
+    /// Returns all nodes reachable within `max_hops` edges from the start.
+    /// The start node is included in the result if it exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Starting node ID for BFS
+    /// * `max_hops` - Maximum number of edges to traverse (depth limit)
+    ///
+    /// # Returns
+    ///
+    /// A vector of node IDs visited during BFS, in order of discovery.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use barq_graphdb::storage::{BarqGraphDb, DbOptions};
+    /// use std::path::PathBuf;
+    ///
+    /// let opts = DbOptions::new(PathBuf::from("./my_db"));
+    /// let db = BarqGraphDb::open(opts).unwrap();
+    /// let reachable = db.bfs_hops(1, 2); // All nodes within 2 hops of node 1
+    /// ```
+    pub fn bfs_hops(&self, start: NodeId, max_hops: usize) -> Vec<NodeId> {
+        use std::collections::{HashSet, VecDeque};
+
+        // Check if start exists in nodes or adjacency
+        if !self.nodes.contains_key(&start) && !self.adjacency.contains_key(&start) {
+            return Vec::new();
+        }
+
+        let mut visited = HashSet::new();
+        let mut result = Vec::new();
+        let mut queue = VecDeque::new();
+
+        // Queue entries: (node_id, current_depth)
+        queue.push_back((start, 0));
+        visited.insert(start);
+        result.push(start);
+
+        while let Some((current, depth)) = queue.pop_front() {
+            // Stop exploring further if we've reached max depth
+            if depth >= max_hops {
+                continue;
+            }
+
+            // Explore neighbors
+            if let Some(neighbors) = self.adjacency.get(&current) {
+                for &neighbor in neighbors {
+                    if !visited.contains(&neighbor) {
+                        visited.insert(neighbor);
+                        result.push(neighbor);
+                        queue.push_back((neighbor, depth + 1));
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Returns the number of edges in the graph.
+    pub fn edge_count(&self) -> usize {
+        self.adjacency.values().map(|v| v.len()).sum()
     }
 }
 

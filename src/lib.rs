@@ -21,6 +21,7 @@
 //! ```
 
 pub mod error;
+pub mod graph;
 pub mod storage;
 
 use serde::{Deserialize, Serialize};
