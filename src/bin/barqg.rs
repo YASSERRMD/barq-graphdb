@@ -102,6 +102,36 @@ enum Commands {
         #[arg(long)]
         hops: usize,
     },
+
+    /// Set embedding for a node.
+    SetEmbedding {
+        /// Path to the database directory.
+        #[arg(long)]
+        path: PathBuf,
+
+        /// Node ID to set embedding for.
+        #[arg(long)]
+        id: u64,
+
+        /// Embedding vector as JSON array, e.g., '[0.1,0.2,0.3]'.
+        #[arg(long)]
+        vec: String,
+    },
+
+    /// Find k nearest neighbors to a query vector.
+    Knn {
+        /// Path to the database directory.
+        #[arg(long)]
+        path: PathBuf,
+
+        /// Query vector as JSON array, e.g., '[0.1,0.2,0.3]'.
+        #[arg(long)]
+        vec: String,
+
+        /// Number of nearest neighbors to return.
+        #[arg(long)]
+        k: usize,
+    },
 }
 
 /// Entry point for the CLI application.
@@ -120,6 +150,8 @@ fn main() -> Result<()> {
         } => add_edge(path, from, to, edge_type),
         Commands::Neighbors { path, id } => neighbors(path, id),
         Commands::Bfs { path, start, hops } => bfs(path, start, hops),
+        Commands::SetEmbedding { path, id, vec } => set_embedding(path, id, vec),
+        Commands::Knn { path, vec, k } => knn(path, vec, k),
     }
 }
 
@@ -235,6 +267,51 @@ fn bfs(path: PathBuf, start: u64, hops: usize) -> Result<()> {
     let result = db.bfs_hops(start, hops);
 
     let output = json!({ "bfs": result });
+    println!("{}", serde_json::to_string_pretty(&output)?);
+
+    Ok(())
+}
+
+/// Sets embedding for a node.
+fn set_embedding(path: PathBuf, id: u64, vec_str: String) -> Result<()> {
+    let opts = DbOptions::new(path.clone());
+    let mut db = BarqGraphDb::open(opts)
+        .with_context(|| format!("Failed to open database at {:?}", path))?;
+
+    let embedding: Vec<f32> = serde_json::from_str(&vec_str)
+        .with_context(|| format!("Failed to parse embedding vector: {}", vec_str))?;
+
+    db.set_embedding(id, embedding.clone())
+        .with_context(|| format!("Failed to set embedding for node {}", id))?;
+
+    let output = json!({
+        "status": "ok",
+        "embedding": {
+            "id": id,
+            "dimension": embedding.len()
+        }
+    });
+    println!("{}", serde_json::to_string_pretty(&output)?);
+
+    Ok(())
+}
+
+/// Finds k nearest neighbors to a query vector.
+fn knn(path: PathBuf, vec_str: String, k: usize) -> Result<()> {
+    let opts = DbOptions::new(path.clone());
+    let db = BarqGraphDb::open(opts)
+        .with_context(|| format!("Failed to open database at {:?}", path))?;
+
+    let query: Vec<f32> = serde_json::from_str(&vec_str)
+        .with_context(|| format!("Failed to parse query vector: {}", vec_str))?;
+
+    let results = db.knn_search(&query, k);
+
+    let output = json!({
+        "results": results.iter().map(|(id, dist)| {
+            json!({ "id": id, "distance": dist })
+        }).collect::<Vec<_>>()
+    });
     println!("{}", serde_json::to_string_pretty(&output)?);
 
     Ok(())

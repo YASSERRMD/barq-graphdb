@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::vector::{LinearVectorIndex, VectorIndex};
 use crate::{Edge, Node, NodeId};
 
 /// Type alias for the node storage map.
@@ -21,8 +22,11 @@ type NodeMap = HashMap<NodeId, Node>;
 /// Type alias for the adjacency list.
 type AdjacencyMap = HashMap<NodeId, Vec<NodeId>>;
 
+/// Type alias for vector storage during WAL load.
+type VectorMap = HashMap<NodeId, Vec<f32>>;
+
 /// Type alias for WAL load result.
-type WalLoadResult = (NodeMap, AdjacencyMap);
+type WalLoadResult = (NodeMap, AdjacencyMap, VectorMap);
 
 /// Configuration options for opening a database.
 #[derive(Debug, Clone)]
@@ -60,6 +64,9 @@ enum WalRecord {
         to: NodeId,
         edge_type: String,
     },
+    /// An embedding was set for a node.
+    #[serde(rename = "embedding")]
+    Embedding { id: NodeId, vec: Vec<f32> },
 }
 
 /// The main database struct providing storage operations.
@@ -75,6 +82,8 @@ pub struct BarqGraphDb {
     nodes: HashMap<NodeId, Node>,
     /// Adjacency list for graph traversal.
     adjacency: HashMap<NodeId, Vec<NodeId>>,
+    /// Vector index for similarity search.
+    vector_index: Box<dyn VectorIndex>,
 }
 
 impl BarqGraphDb {
@@ -115,11 +124,23 @@ impl BarqGraphDb {
         let wal_path = opts.path.join("wal.log");
 
         // Load existing records if WAL exists
-        let (nodes, adjacency) = if wal_path.exists() {
+        let (nodes, adjacency, vectors) = if wal_path.exists() {
             Self::load_wal(&wal_path).with_context(|| "Failed to load WAL")?
         } else {
-            (HashMap::new(), HashMap::new())
+            (HashMap::new(), HashMap::new(), HashMap::new())
         };
+
+        // Build vector index from loaded vectors
+        let mut vector_index = Box::new(LinearVectorIndex::new());
+        for (id, embedding) in &vectors {
+            vector_index.insert(*id, embedding);
+        }
+        // Also add embeddings from nodes
+        for (id, node) in &nodes {
+            if !node.embedding.is_empty() && !vector_index.contains(*id) {
+                vector_index.insert(*id, &node.embedding);
+            }
+        }
 
         // Open WAL file for appending
         let wal = OpenOptions::new()
@@ -133,6 +154,7 @@ impl BarqGraphDb {
             wal,
             nodes,
             adjacency,
+            vector_index,
         })
     }
 
@@ -152,6 +174,7 @@ impl BarqGraphDb {
         let reader = BufReader::new(file);
         let mut nodes = HashMap::new();
         let mut adjacency: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+        let mut vectors: HashMap<NodeId, Vec<f32>> = HashMap::new();
 
         for (line_num, line_result) in reader.lines().enumerate() {
             let line =
@@ -172,16 +195,27 @@ impl BarqGraphDb {
                         adjacency.entry(edge.from).or_default().push(edge.to);
                         adjacency.entry(edge.to).or_default();
                     }
+                    // Store embedding if present
+                    if !node.embedding.is_empty() {
+                        vectors.insert(node.id, node.embedding.clone());
+                    }
                     nodes.insert(node.id, node);
                 }
                 WalRecord::Edge { from, to, .. } => {
                     adjacency.entry(from).or_default().push(to);
                     adjacency.entry(to).or_default();
                 }
+                WalRecord::Embedding { id, vec } => {
+                    vectors.insert(id, vec.clone());
+                    // Update node embedding if node exists
+                    if let Some(node) = nodes.get_mut(&id) {
+                        node.embedding = vec;
+                    }
+                }
             }
         }
 
-        Ok((nodes, adjacency))
+        Ok((nodes, adjacency, vectors))
     }
 
     /// Appends a node to the database.
@@ -233,6 +267,11 @@ impl BarqGraphDb {
         for edge in &node.edges {
             self.adjacency.entry(edge.from).or_default().push(edge.to);
             self.adjacency.entry(edge.to).or_default();
+        }
+
+        // Add embedding to vector index if present
+        if !node.embedding.is_empty() {
+            self.vector_index.insert(node.id, &node.embedding);
         }
 
         // Update in-memory index
@@ -418,6 +457,94 @@ impl BarqGraphDb {
     /// Returns the number of edges in the graph.
     pub fn edge_count(&self) -> usize {
         self.adjacency.values().map(|v| v.len()).sum()
+    }
+
+    /// Sets the vector embedding for a node.
+    ///
+    /// The embedding is written to the WAL for durability and added
+    /// to the vector index for similarity search.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Node ID to set embedding for
+    /// * `embedding` - Vector embedding to store
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or an error.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use barq_graphdb::storage::{BarqGraphDb, DbOptions};
+    /// use std::path::PathBuf;
+    ///
+    /// let opts = DbOptions::new(PathBuf::from("./my_db"));
+    /// let mut db = BarqGraphDb::open(opts).unwrap();
+    /// db.set_embedding(1, vec![0.1, 0.2, 0.3]).unwrap();
+    /// ```
+    pub fn set_embedding(&mut self, id: NodeId, embedding: Vec<f32>) -> Result<()> {
+        let record = WalRecord::Embedding {
+            id,
+            vec: embedding.clone(),
+        };
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&record)
+            .with_context(|| "Failed to serialize embedding to JSON")?;
+
+        // Append to WAL
+        writeln!(self.wal, "{}", json).with_context(|| "Failed to write embedding to WAL")?;
+
+        // Flush to ensure durability
+        self.wal.flush().with_context(|| "Failed to flush WAL")?;
+
+        // Update vector index
+        self.vector_index.insert(id, &embedding);
+
+        // Update node if it exists
+        if let Some(node) = self.nodes.get_mut(&id) {
+            node.embedding = embedding;
+        }
+
+        Ok(())
+    }
+
+    /// Finds the k nearest neighbors to a query vector.
+    ///
+    /// Uses L2 (Euclidean) distance for similarity comparison.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - Query vector for similarity search
+    /// * `k` - Number of nearest neighbors to return
+    ///
+    /// # Returns
+    ///
+    /// A vector of (NodeId, distance) pairs sorted by distance ascending.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use barq_graphdb::storage::{BarqGraphDb, DbOptions};
+    /// use std::path::PathBuf;
+    ///
+    /// let opts = DbOptions::new(PathBuf::from("./my_db"));
+    /// let db = BarqGraphDb::open(opts).unwrap();
+    /// let results = db.knn_search(&[0.1, 0.2, 0.3], 5);
+    /// ```
+    pub fn knn_search(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32)> {
+        self.vector_index.knn(query, k)
+    }
+
+    /// Returns the number of vectors in the index.
+    pub fn vector_count(&self) -> usize {
+        self.vector_index.len()
+    }
+
+    /// Gets the embedding for a node if it exists.
+    pub fn get_embedding(&self, id: NodeId) -> Option<&[f32]> {
+        self.vector_index.get(id)
     }
 }
 

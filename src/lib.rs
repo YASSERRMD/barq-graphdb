@@ -23,6 +23,7 @@
 pub mod error;
 pub mod graph;
 pub mod storage;
+pub mod vector;
 
 use serde::{Deserialize, Serialize};
 
