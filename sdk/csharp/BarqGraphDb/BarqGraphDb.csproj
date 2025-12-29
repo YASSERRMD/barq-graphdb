@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>BarqGraphDb</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>YASSERRMD</Authors>
+    <Description>C# SDK for Barq-GraphDB - A graph+vector database for AI agents</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/YASSERRMD/barq-graphdb</RepositoryUrl>
+    <PackageTags>graph;vector;database;ai;agents;sdk</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

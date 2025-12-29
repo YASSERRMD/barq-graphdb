@@ -1,0 +1,33 @@
+{
+    "name": "barq-graphdb",
+    "version": "0.1.0",
+    "description": "Node.js SDK for Barq-GraphDB - A graph+vector database for AI agents",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "test": "node --test test/client.test.js",
+        "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+        "graph",
+        "vector",
+        "database",
+        "ai",
+        "agents",
+        "sdk"
+    ],
+    "author": "YASSERRMD",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/YASSERRMD/barq-graphdb.git"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0"
+    }
+}

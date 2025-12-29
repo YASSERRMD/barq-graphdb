@@ -47,6 +47,27 @@ After building, two binaries are available:
 - `barqg` - Command-line interface
 - `barqg_server` - HTTP REST API server
 
+### Docker
+
+```bash
+docker compose up -d
+```
+
+The server will be available at `http://localhost:3000`.
+
+## Client SDKs
+
+Official SDKs are available for multiple languages:
+
+| Language | Location | Installation |
+|----------|----------|--------------|
+| **Python** | `sdk/python` | `pip install barq-graphdb` |
+| **Go** | `sdk/go` | `go get github.com/YASSERRMD/barq-graphdb/sdk/go` |
+| **C#** | `sdk/csharp` | `dotnet add package BarqGraphDb` |
+| **Node.js** | `sdk/nodejs` | `npm install barq-graphdb` |
+
+See each SDK's README for detailed usage examples.
+
 ## Quick Start
 
 ### Initialize a Database
