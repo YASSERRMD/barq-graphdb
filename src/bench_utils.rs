@@ -22,7 +22,9 @@ pub fn generate_random_nodes(count: usize, embedding_dim: usize) -> Vec<Node> {
     (0..count)
         .map(|i| {
             let embedding = if embedding_dim > 0 {
-                (0..embedding_dim).map(|_| rng.gen_range(0.0..1.0)).collect()
+                (0..embedding_dim)
+                    .map(|_| rng.gen_range(0.0..1.0))
+                    .collect()
             } else {
                 vec![]
             };

@@ -2,9 +2,9 @@
 //!
 //! Benchmarks for core storage operations: write throughput, persistence, reload.
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use barq_graphdb::bench_utils::generate_random_nodes;
 use barq_graphdb::storage::{BarqGraphDb, DbOptions};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use tempfile::TempDir;
 
 /// Benchmark write throughput for different node counts.
@@ -17,8 +17,7 @@ fn benchmark_write_throughput(c: &mut Criterion) {
             b.iter_batched(
                 || {
                     let dir = TempDir::new().unwrap();
-                    let db =
-                        BarqGraphDb::open(DbOptions::new(dir.path().to_path_buf())).unwrap();
+                    let db = BarqGraphDb::open(DbOptions::new(dir.path().to_path_buf())).unwrap();
                     let nodes_data = generate_random_nodes(n, 0);
                     (dir, db, nodes_data)
                 },
@@ -44,8 +43,7 @@ fn benchmark_write_with_embeddings(c: &mut Criterion) {
             b.iter_batched(
                 || {
                     let dir = TempDir::new().unwrap();
-                    let db =
-                        BarqGraphDb::open(DbOptions::new(dir.path().to_path_buf())).unwrap();
+                    let db = BarqGraphDb::open(DbOptions::new(dir.path().to_path_buf())).unwrap();
                     let nodes_data = generate_random_nodes(n, 128);
                     (dir, db, nodes_data)
                 },

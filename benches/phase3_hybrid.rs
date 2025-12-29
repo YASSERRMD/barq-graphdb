@@ -2,10 +2,12 @@
 //!
 //! Benchmarks for hybrid queries combining vector similarity and graph traversal.
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use barq_graphdb::bench_utils::{generate_random_nodes, generate_random_query, generate_scale_free_edges};
+use barq_graphdb::bench_utils::{
+    generate_random_nodes, generate_random_query, generate_scale_free_edges,
+};
 use barq_graphdb::hybrid::HybridParams;
 use barq_graphdb::storage::{BarqGraphDb, DbOptions};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use tempfile::TempDir;
 
 /// Benchmark hybrid query with different graph sizes.

@@ -2,9 +2,9 @@
 //!
 //! Benchmarks for vector operations: kNN search, embedding storage.
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use barq_graphdb::bench_utils::{generate_random_nodes, generate_random_query};
 use barq_graphdb::storage::{BarqGraphDb, DbOptions};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use tempfile::TempDir;
 
 /// Benchmark kNN search with different dataset sizes.

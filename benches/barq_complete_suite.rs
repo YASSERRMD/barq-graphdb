@@ -2,13 +2,15 @@
 //!
 //! Comprehensive benchmarks covering all Barq-GraphDB operations at scale.
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use barq_graphdb::agent::DecisionRecord;
-use barq_graphdb::bench_utils::{generate_random_nodes, generate_random_query, generate_scale_free_edges};
+use barq_graphdb::bench_utils::{
+    generate_random_nodes, generate_random_query, generate_scale_free_edges,
+};
 use barq_graphdb::hybrid::HybridParams;
 use barq_graphdb::storage::{BarqGraphDb, DbOptions};
-use tempfile::TempDir;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::time::Duration;
+use tempfile::TempDir;
 
 /// Comprehensive write throughput benchmark at scale.
 fn barq_write_throughput_scale(c: &mut Criterion) {
@@ -21,8 +23,7 @@ fn barq_write_throughput_scale(c: &mut Criterion) {
             b.iter_batched(
                 || {
                     let dir = TempDir::new().unwrap();
-                    let db =
-                        BarqGraphDb::open(DbOptions::new(dir.path().to_path_buf())).unwrap();
+                    let db = BarqGraphDb::open(DbOptions::new(dir.path().to_path_buf())).unwrap();
                     let nodes_data = generate_random_nodes(n, 0);
                     (dir, db, nodes_data)
                 },
@@ -77,13 +78,7 @@ fn barq_agentic_workload(c: &mut Criterion) {
 
                 // 4. Record 10 agent decisions
                 for i in 0..10 {
-                    let decision = DecisionRecord::new(
-                        i as u64,
-                        1,
-                        0,
-                        vec![0, 1, 2],
-                        0.9,
-                    );
+                    let decision = DecisionRecord::new(i as u64, 1, 0, vec![0, 1, 2], 0.9);
                     db.record_decision(decision).unwrap();
                 }
             },
@@ -103,19 +98,13 @@ fn barq_decision_recording(c: &mut Criterion) {
             b.iter_batched(
                 || {
                     let dir = TempDir::new().unwrap();
-                    let db =
-                        BarqGraphDb::open(DbOptions::new(dir.path().to_path_buf())).unwrap();
+                    let db = BarqGraphDb::open(DbOptions::new(dir.path().to_path_buf())).unwrap();
                     (dir, db)
                 },
                 |(_, mut db)| {
                     for i in 0..n {
-                        let decision = DecisionRecord::new(
-                            i as u64,
-                            1,
-                            0,
-                            vec![0, 1, 2, 3, 4],
-                            0.85,
-                        );
+                        let decision =
+                            DecisionRecord::new(i as u64, 1, 0, vec![0, 1, 2, 3, 4], 0.85);
                         db.record_decision(decision).unwrap();
                     }
                 },
@@ -149,7 +138,7 @@ fn barq_memory_efficiency(c: &mut Criterion) {
                             db.append_node(node).unwrap();
                             db.set_embedding(id, embedding).unwrap();
                         }
-                        
+
                         // Report WAL size
                         let wal_path = dir.path().join("wal.log");
                         if let Ok(metadata) = std::fs::metadata(&wal_path) {

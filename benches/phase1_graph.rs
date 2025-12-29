@@ -2,9 +2,9 @@
 //!
 //! Benchmarks for graph operations: BFS traversal, neighbor access, edge creation.
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use barq_graphdb::bench_utils::{generate_random_nodes, generate_scale_free_edges};
 use barq_graphdb::storage::{BarqGraphDb, DbOptions};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use tempfile::TempDir;
 
 /// Benchmark BFS traversal with different graph sizes and hop depths.
