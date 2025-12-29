@@ -13,6 +13,10 @@ categories = ["database", "data-structures"]
 name = "barqg"
 path = "src/bin/barqg.rs"
 
+[[bin]]
+name = "barqg_server"
+path = "src/bin/barqg_server.rs"
+
 [dependencies]
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
@@ -22,6 +26,8 @@ clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 memmap2 = "0.9"
 parking_lot = "0.12"
+axum = "0.7"
 
 [dev-dependencies]
 tempfile = "3"
+reqwest = { version = "0.12", features = ["json"] }
