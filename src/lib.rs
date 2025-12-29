@@ -22,6 +22,7 @@
 
 pub mod error;
 pub mod graph;
+pub mod hybrid;
 pub mod storage;
 pub mod vector;
 

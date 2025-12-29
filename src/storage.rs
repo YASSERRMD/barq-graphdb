@@ -546,6 +546,127 @@ impl BarqGraphDb {
     pub fn get_embedding(&self, id: NodeId) -> Option<&[f32]> {
         self.vector_index.get(id)
     }
+
+    /// Performs a hybrid query combining vector similarity and graph distance.
+    ///
+    /// Starting from a given node, explores the graph via BFS up to max_hops,
+    /// computes vector similarity for each visited node, and returns the top k
+    /// results ranked by hybrid score.
+    ///
+    /// The hybrid score combines:
+    /// - Vector similarity: `alpha * (1 - normalized_vector_distance)`
+    /// - Graph proximity: `beta * (1 / (1 + graph_distance))`
+    ///
+    /// # Arguments
+    ///
+    /// * `query_embedding` - Query vector for similarity comparison
+    /// * `start` - Starting node ID for BFS traversal
+    /// * `max_hops` - Maximum BFS depth to explore
+    /// * `k` - Number of top results to return
+    /// * `params` - Hybrid scoring parameters (alpha, beta weights)
+    ///
+    /// # Returns
+    ///
+    /// A vector of `HybridResult` sorted by score descending.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use barq_graphdb::storage::{BarqGraphDb, DbOptions};
+    /// use barq_graphdb::hybrid::HybridParams;
+    /// use std::path::PathBuf;
+    ///
+    /// let opts = DbOptions::new(PathBuf::from("./my_db"));
+    /// let db = BarqGraphDb::open(opts).unwrap();
+    /// let params = HybridParams::new(0.7, 0.3);
+    /// let results = db.hybrid_query(&[0.1, 0.2], 1, 3, 5, params);
+    /// ```
+    pub fn hybrid_query(
+        &self,
+        query_embedding: &[f32],
+        start: NodeId,
+        max_hops: usize,
+        k: usize,
+        params: crate::hybrid::HybridParams,
+    ) -> Vec<crate::hybrid::HybridResult> {
+        use crate::hybrid::{compute_hybrid_score, HybridResult};
+        use crate::vector::l2_distance;
+        use std::collections::{HashMap, HashSet, VecDeque};
+
+        // Check if start exists
+        if !self.nodes.contains_key(&start) && !self.adjacency.contains_key(&start) {
+            return Vec::new();
+        }
+
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        // Track: (node_id, distance, path_to_node)
+        let mut node_info: HashMap<NodeId, (usize, Vec<NodeId>)> = HashMap::new();
+
+        // Initialize BFS from start
+        queue.push_back((start, 0, vec![start]));
+        visited.insert(start);
+        node_info.insert(start, (0, vec![start]));
+
+        while let Some((current, depth, path)) = queue.pop_front() {
+            // Stop exploring further if we've reached max depth
+            if depth >= max_hops {
+                continue;
+            }
+
+            // Explore neighbors
+            if let Some(neighbors) = self.adjacency.get(&current) {
+                for &neighbor in neighbors {
+                    if !visited.contains(&neighbor) {
+                        visited.insert(neighbor);
+                        let mut new_path = path.clone();
+                        new_path.push(neighbor);
+                        node_info.insert(neighbor, (depth + 1, new_path.clone()));
+                        queue.push_back((neighbor, depth + 1, new_path));
+                    }
+                }
+            }
+        }
+
+        // Compute hybrid scores for all visited nodes with embeddings
+        let mut results: Vec<HybridResult> = node_info
+            .iter()
+            .filter_map(|(&node_id, (graph_dist, path))| {
+                // Get embedding for this node
+                let embedding = self.vector_index.get(node_id)?;
+
+                // Skip if dimensions don't match
+                if embedding.len() != query_embedding.len() {
+                    return None;
+                }
+
+                // Compute vector distance
+                let vec_dist = l2_distance(query_embedding, embedding);
+
+                // Compute hybrid score
+                let score = compute_hybrid_score(vec_dist, *graph_dist, &params);
+
+                Some(HybridResult::new(
+                    node_id,
+                    score,
+                    vec_dist,
+                    *graph_dist,
+                    path.clone(),
+                ))
+            })
+            .collect();
+
+        // Sort by score descending
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // Return top k
+        results.truncate(k);
+        results
+    }
 }
 
 #[cfg(test)]
