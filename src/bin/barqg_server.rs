@@ -59,6 +59,7 @@ async fn main() {
         .route("/stats", get(api::get_stats))
         // Node operations
         .route("/nodes", get(api::list_nodes))
+        .route("/nodes/:id", get(api::get_node))
         .route("/nodes", post(api::create_node))
         // Edge operations
         .route("/edges", post(api::create_edge))
