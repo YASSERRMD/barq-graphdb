@@ -3,12 +3,12 @@
 //! This suite demonstrates performance on real-world semantic data rather than random vectors.
 //! Note: The model files are downloaded to 'fastembed_cache/' which is .gitignored.
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use barq_graphdb::storage::{BarqGraphDb, DbOptions};
 use barq_graphdb::Node;
-use fastembed::{InitOptions, TextEmbedding, EmbeddingModel};
-use tempfile::TempDir;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
 use std::time::Duration;
+use tempfile::TempDir;
 
 // A small corpus of real-world sentences for semantic search
 const REAL_DATASET: &[&str] = &[
@@ -49,7 +49,7 @@ fn init_model() -> TextEmbedding {
     options.model_name = EmbeddingModel::AllMiniLML6V2;
     options.show_download_progress = true;
     options.cache_dir = std::path::PathBuf::from("fastembed_cache");
-    
+
     TextEmbedding::try_new(options).expect("Failed to initialize embedding model")
 }
 
@@ -69,24 +69,29 @@ fn benchmark_real_vector_search(c: &mut Criterion) {
     let docs: Vec<String> = (0..replication_factor)
         .flat_map(|i| REAL_DATASET.iter().map(move |s| format!("{} [{}]", s, i)))
         .collect();
-    
+
     println!("Generating embeddings for {} documents...", docs.len());
-    let embeddings = model.embed(docs.clone(), None).expect("Embedding generation failed");
-    
+    let embeddings = model
+        .embed(docs.clone(), None)
+        .expect("Embedding generation failed");
+
     // 3. Generate Embeddings for Queries
-    let query_embeddings = model.embed(QUERY_TEXTS.to_vec(), None).expect("Query embedding failed");
+    let query_embeddings = model
+        .embed(QUERY_TEXTS.to_vec(), None)
+        .expect("Query embedding failed");
 
     // 4. Setup Database
     for size in [100, 1000, 2000].iter() {
-        if *size > docs.len() { continue; }
-        
+        if *size > docs.len() {
+            continue;
+        }
+
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &n| {
             b.iter_batched(
                 || {
                     let dir = TempDir::new().unwrap();
-                    let mut db = BarqGraphDb::open(
-                        DbOptions::new(dir.path().to_path_buf())
-                    ).unwrap();
+                    let mut db =
+                        BarqGraphDb::open(DbOptions::new(dir.path().to_path_buf())).unwrap();
 
                     // Insert N nodes with embeddings
                     for i in 0..n {
@@ -108,7 +113,7 @@ fn benchmark_real_vector_search(c: &mut Criterion) {
                     // Pick a random query vector
                     let q_idx = rand::random::<usize>() % query_embeddings.len();
                     let q_vec = &query_embeddings[q_idx];
-                    
+
                     let results = db.knn_search(q_vec, 10);
                     assert!(!results.is_empty());
                 },
@@ -124,23 +129,23 @@ fn benchmark_real_vector_search(c: &mut Criterion) {
 fn benchmark_real_graph_traversal(c: &mut Criterion) {
     let mut group = c.benchmark_group("real_graph_traversal");
     group.sample_size(10);
-    
+
     // Use the same dataset logic
     let mut model = init_model();
     let replication_factor = 50; // 1000 nodes
     let docs: Vec<String> = (0..replication_factor)
         .flat_map(|i| REAL_DATASET.iter().map(move |s| format!("{} [{}]", s, i)))
         .collect();
-        
-    let embeddings = model.embed(docs.clone(), None).expect("Embedding generation failed");
+
+    let embeddings = model
+        .embed(docs.clone(), None)
+        .expect("Embedding generation failed");
 
     group.bench_function("semantic_graph_bfs_1k", |b| {
         b.iter_batched(
             || {
                 let dir = TempDir::new().unwrap();
-                let mut db = BarqGraphDb::open(
-                    DbOptions::new(dir.path().to_path_buf())
-                ).unwrap();
+                let mut db = BarqGraphDb::open(DbOptions::new(dir.path().to_path_buf())).unwrap();
 
                 // 1. Insert Nodes
                 for i in 0..docs.len() {
@@ -163,16 +168,19 @@ fn benchmark_real_graph_traversal(c: &mut Criterion) {
                 for i in 0..docs.len() {
                     // Connect to next instance of similar topic (if exists)
                     if i + stride < docs.len() {
-                         db.add_edge(i as u64, (i + stride) as u64, "semantically_related").unwrap();
+                        db.add_edge(i as u64, (i + stride) as u64, "semantically_related")
+                            .unwrap();
                     }
                     // Connect to previous for bidirectional flow
                     if i >= stride {
-                        db.add_edge(i as u64, (i - stride) as u64, "semantically_related").unwrap();
+                        db.add_edge(i as u64, (i - stride) as u64, "semantically_related")
+                            .unwrap();
                     }
                     // Add some random cross-links for complexity
                     if i % 7 == 0 {
-                         let target = (i + 3) % docs.len();
-                         db.add_edge(i as u64, target as u64, "cross_reference").unwrap();
+                        let target = (i + 3) % docs.len();
+                        db.add_edge(i as u64, target as u64, "cross_reference")
+                            .unwrap();
                     }
                 }
                 (dir, db)
@@ -190,5 +198,9 @@ fn benchmark_real_graph_traversal(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, benchmark_real_vector_search, benchmark_real_graph_traversal);
+criterion_group!(
+    benches,
+    benchmark_real_vector_search,
+    benchmark_real_graph_traversal
+);
 criterion_main!(benches);
