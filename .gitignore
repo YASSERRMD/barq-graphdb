@@ -1,0 +1,16 @@
+# Generated files
+/target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test databases
+/test_db/
+*.db
