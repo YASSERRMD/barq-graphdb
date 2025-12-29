@@ -20,3 +20,6 @@ sdk/nodejs/node_modules/
 sdk/nodejs/dist/
 sdk/csharp/**/bin/
 sdk/csharp/**/obj/
+
+# Model cache
+fastembed_cache/
