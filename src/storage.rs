@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::agent::DecisionRecord;
 use crate::vector::{LinearVectorIndex, VectorIndex};
 use crate::{Edge, Node, NodeId};
 
@@ -26,7 +27,7 @@ type AdjacencyMap = HashMap<NodeId, Vec<NodeId>>;
 type VectorMap = HashMap<NodeId, Vec<f32>>;
 
 /// Type alias for WAL load result.
-type WalLoadResult = (NodeMap, AdjacencyMap, VectorMap);
+type WalLoadResult = (NodeMap, AdjacencyMap, VectorMap, Vec<DecisionRecord>);
 
 /// Configuration options for opening a database.
 #[derive(Debug, Clone)]
@@ -67,6 +68,9 @@ enum WalRecord {
     /// An embedding was set for a node.
     #[serde(rename = "embedding")]
     Embedding { id: NodeId, vec: Vec<f32> },
+    /// A decision record was added.
+    #[serde(rename = "decision")]
+    Decision { data: DecisionRecord },
 }
 
 /// The main database struct providing storage operations.
@@ -84,6 +88,8 @@ pub struct BarqGraphDb {
     adjacency: HashMap<NodeId, Vec<NodeId>>,
     /// Vector index for similarity search.
     vector_index: Box<dyn VectorIndex>,
+    /// Agent decision records.
+    decisions: Vec<DecisionRecord>,
 }
 
 impl BarqGraphDb {
@@ -124,10 +130,10 @@ impl BarqGraphDb {
         let wal_path = opts.path.join("wal.log");
 
         // Load existing records if WAL exists
-        let (nodes, adjacency, vectors) = if wal_path.exists() {
+        let (nodes, adjacency, vectors, decisions) = if wal_path.exists() {
             Self::load_wal(&wal_path).with_context(|| "Failed to load WAL")?
         } else {
-            (HashMap::new(), HashMap::new(), HashMap::new())
+            (HashMap::new(), HashMap::new(), HashMap::new(), Vec::new())
         };
 
         // Build vector index from loaded vectors
@@ -155,6 +161,7 @@ impl BarqGraphDb {
             nodes,
             adjacency,
             vector_index,
+            decisions,
         })
     }
 
@@ -175,6 +182,7 @@ impl BarqGraphDb {
         let mut nodes = HashMap::new();
         let mut adjacency: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
         let mut vectors: HashMap<NodeId, Vec<f32>> = HashMap::new();
+        let mut decisions: Vec<DecisionRecord> = Vec::new();
 
         for (line_num, line_result) in reader.lines().enumerate() {
             let line =
@@ -212,10 +220,13 @@ impl BarqGraphDb {
                         node.embedding = vec;
                     }
                 }
+                WalRecord::Decision { data: decision } => {
+                    decisions.push(decision);
+                }
             }
         }
 
-        Ok((nodes, adjacency, vectors))
+        Ok((nodes, adjacency, vectors, decisions))
     }
 
     /// Appends a node to the database.
@@ -666,6 +677,96 @@ impl BarqGraphDb {
         // Return top k
         results.truncate(k);
         results
+    }
+
+    /// Records an agent decision to the database.
+    ///
+    /// The decision is written to the WAL for durability and stored
+    /// in memory for querying.
+    ///
+    /// # Arguments
+    ///
+    /// * `record` - The decision record to store
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or an error.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use barq_graphdb::storage::{BarqGraphDb, DbOptions};
+    /// use barq_graphdb::agent::DecisionRecord;
+    /// use std::path::PathBuf;
+    ///
+    /// let opts = DbOptions::new(PathBuf::from("./my_db"));
+    /// let mut db = BarqGraphDb::open(opts).unwrap();
+    ///
+    /// let decision = DecisionRecord::new(1, 42, 100, vec![100, 101], 0.95);
+    /// db.record_decision(decision).unwrap();
+    /// ```
+    pub fn record_decision(&mut self, record: DecisionRecord) -> Result<()> {
+        let wal_record = WalRecord::Decision {
+            data: record.clone(),
+        };
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&wal_record)
+            .with_context(|| "Failed to serialize decision to JSON")?;
+
+        // Append to WAL
+        writeln!(self.wal, "{}", json).with_context(|| "Failed to write decision to WAL")?;
+
+        // Flush to ensure durability
+        self.wal.flush().with_context(|| "Failed to flush WAL")?;
+
+        // Add to in-memory storage
+        self.decisions.push(record);
+
+        Ok(())
+    }
+
+    /// Lists all decisions for a specific agent.
+    ///
+    /// # Arguments
+    ///
+    /// * `agent_id` - ID of the agent to filter by
+    ///
+    /// # Returns
+    ///
+    /// A vector of references to decision records for the specified agent.
+    pub fn list_decisions_for_agent(&self, agent_id: u64) -> Vec<&DecisionRecord> {
+        self.decisions
+            .iter()
+            .filter(|d| d.agent_id == agent_id)
+            .collect()
+    }
+
+    /// Lists all decisions in the database.
+    ///
+    /// # Returns
+    ///
+    /// A vector of references to all decision records.
+    pub fn list_all_decisions(&self) -> Vec<&DecisionRecord> {
+        self.decisions.iter().collect()
+    }
+
+    /// Returns the total number of decisions in the database.
+    pub fn decision_count(&self) -> usize {
+        self.decisions.len()
+    }
+
+    /// Gets a decision by its ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The decision ID to look up
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing a reference to the decision if found.
+    pub fn get_decision(&self, id: u64) -> Option<&DecisionRecord> {
+        self.decisions.iter().find(|d| d.id == id)
     }
 }
 

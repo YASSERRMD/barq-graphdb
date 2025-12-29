@@ -20,6 +20,7 @@
 //! let mut db = BarqGraphDb::open(opts).unwrap();
 //! ```
 
+pub mod agent;
 pub mod error;
 pub mod graph;
 pub mod hybrid;
