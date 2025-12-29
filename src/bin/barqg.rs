@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde_json::json;
 
+use barq_graphdb::hybrid::HybridParams;
 use barq_graphdb::storage::{BarqGraphDb, DbOptions};
 use barq_graphdb::Node;
 
@@ -132,6 +133,37 @@ enum Commands {
         #[arg(long)]
         k: usize,
     },
+
+    /// Perform hybrid query combining vector similarity and graph distance.
+    Hybrid {
+        /// Path to the database directory.
+        #[arg(long)]
+        path: PathBuf,
+
+        /// Starting node ID for BFS traversal.
+        #[arg(long)]
+        start: u64,
+
+        /// Maximum number of hops for BFS.
+        #[arg(long)]
+        hops: usize,
+
+        /// Number of top results to return.
+        #[arg(long)]
+        k: usize,
+
+        /// Query vector as JSON array, e.g., '[0.1,0.2,0.3]'.
+        #[arg(long)]
+        vec: String,
+
+        /// Weight for vector similarity (0.0 to 1.0).
+        #[arg(long, default_value = "0.5")]
+        alpha: f32,
+
+        /// Weight for graph distance (0.0 to 1.0).
+        #[arg(long, default_value = "0.5")]
+        beta: f32,
+    },
 }
 
 /// Entry point for the CLI application.
@@ -152,6 +184,15 @@ fn main() -> Result<()> {
         Commands::Bfs { path, start, hops } => bfs(path, start, hops),
         Commands::SetEmbedding { path, id, vec } => set_embedding(path, id, vec),
         Commands::Knn { path, vec, k } => knn(path, vec, k),
+        Commands::Hybrid {
+            path,
+            start,
+            hops,
+            k,
+            vec,
+            alpha,
+            beta,
+        } => hybrid(path, start, hops, k, vec, alpha, beta),
     }
 }
 
@@ -310,6 +351,42 @@ fn knn(path: PathBuf, vec_str: String, k: usize) -> Result<()> {
     let output = json!({
         "results": results.iter().map(|(id, dist)| {
             json!({ "id": id, "distance": dist })
+        }).collect::<Vec<_>>()
+    });
+    println!("{}", serde_json::to_string_pretty(&output)?);
+
+    Ok(())
+}
+
+/// Performs hybrid query combining vector similarity and graph distance.
+fn hybrid(
+    path: PathBuf,
+    start: u64,
+    hops: usize,
+    k: usize,
+    vec_str: String,
+    alpha: f32,
+    beta: f32,
+) -> Result<()> {
+    let opts = DbOptions::new(path.clone());
+    let db = BarqGraphDb::open(opts)
+        .with_context(|| format!("Failed to open database at {:?}", path))?;
+
+    let query: Vec<f32> = serde_json::from_str(&vec_str)
+        .with_context(|| format!("Failed to parse query vector: {}", vec_str))?;
+
+    let params = HybridParams::new(alpha, beta);
+    let results = db.hybrid_query(&query, start, hops, k, params);
+
+    let output = json!({
+        "results": results.iter().map(|r| {
+            json!({
+                "id": r.id,
+                "score": r.score,
+                "vector_distance": r.vector_distance,
+                "graph_distance": r.graph_distance,
+                "path": r.path
+            })
         }).collect::<Vec<_>>()
     });
     println!("{}", serde_json::to_string_pretty(&output)?);
