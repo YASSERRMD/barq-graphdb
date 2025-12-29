@@ -22,6 +22,7 @@
 
 pub mod agent;
 pub mod api;
+pub mod bench_utils;
 pub mod error;
 pub mod graph;
 pub mod hybrid;

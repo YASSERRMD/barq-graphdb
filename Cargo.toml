@@ -27,7 +27,29 @@ tokio = { version = "1", features = ["full"] }
 memmap2 = "0.9"
 parking_lot = "0.12"
 axum = "0.7"
+rand = "0.8"
 
 [dev-dependencies]
 tempfile = "3"
 reqwest = { version = "0.12", features = ["json"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "phase0_storage"
+harness = false
+
+[[bench]]
+name = "phase1_graph"
+harness = false
+
+[[bench]]
+name = "phase2_vector"
+harness = false
+
+[[bench]]
+name = "phase3_hybrid"
+harness = false
+
+[[bench]]
+name = "barq_complete_suite"
+harness = false
