@@ -61,6 +61,10 @@ name = "phase3_hnsw"
 harness = false
 
 [[bench]]
+name = "phase3_write"
+harness = false
+
+[[bench]]
 name = "real_model_suite"
 harness = false
 
