@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -313,6 +313,28 @@ pub async fn list_decisions(
 
     Ok(Json(serde_json::json!({
         "decisions": response
+    })))
+}
+
+/// Gets a single node by ID.
+pub async fn get_node(
+    State(db): State<DbState>,
+    Path(id): Path<u64>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = db.lock().await;
+
+    let node = db
+        .get_node(id)
+        .ok_or_else(|| AppError::new(StatusCode::NOT_FOUND, format!("Node {} not found", id)))?;
+
+    Ok(Json(serde_json::json!({
+        "id": node.id,
+        "label": node.label,
+        "embedding": node.embedding,
+        "agent_id": node.agent_id,
+        "rule_tags": node.rule_tags,
+        "edges": node.edges,
+        "timestamp": node.timestamp
     })))
 }
 
