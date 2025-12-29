@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde_json::json;
 
+use barq_graphdb::agent::DecisionRecord;
 use barq_graphdb::hybrid::HybridParams;
 use barq_graphdb::storage::{BarqGraphDb, DbOptions};
 use barq_graphdb::Node;
@@ -164,6 +165,44 @@ enum Commands {
         #[arg(long, default_value = "0.5")]
         beta: f32,
     },
+
+    /// Record an agent decision.
+    RecordDecision {
+        /// Path to the database directory.
+        #[arg(long)]
+        path: PathBuf,
+
+        /// Agent ID that made the decision.
+        #[arg(long)]
+        agent_id: u64,
+
+        /// Root/starting node for the decision.
+        #[arg(long)]
+        root: u64,
+
+        /// Decision path as JSON array, e.g., '[1,2,3]'.
+        #[arg(long)]
+        decision_path: String,
+
+        /// Confidence score for the decision.
+        #[arg(long)]
+        score: f32,
+
+        /// Optional notes about the decision.
+        #[arg(long)]
+        notes: Option<String>,
+    },
+
+    /// List decisions for an agent.
+    ListDecisions {
+        /// Path to the database directory.
+        #[arg(long)]
+        path: PathBuf,
+
+        /// Agent ID to filter by.
+        #[arg(long)]
+        agent_id: u64,
+    },
 }
 
 /// Entry point for the CLI application.
@@ -193,6 +232,15 @@ fn main() -> Result<()> {
             alpha,
             beta,
         } => hybrid(path, start, hops, k, vec, alpha, beta),
+        Commands::RecordDecision {
+            path,
+            agent_id,
+            root,
+            decision_path,
+            score,
+            notes,
+        } => record_decision(path, agent_id, root, decision_path, score, notes),
+        Commands::ListDecisions { path, agent_id } => list_decisions(path, agent_id),
     }
 }
 
@@ -386,6 +434,76 @@ fn hybrid(
                 "vector_distance": r.vector_distance,
                 "graph_distance": r.graph_distance,
                 "path": r.path
+            })
+        }).collect::<Vec<_>>()
+    });
+    println!("{}", serde_json::to_string_pretty(&output)?);
+
+    Ok(())
+}
+
+/// Records an agent decision.
+fn record_decision(
+    path: PathBuf,
+    agent_id: u64,
+    root: u64,
+    decision_path_str: String,
+    score: f32,
+    notes: Option<String>,
+) -> Result<()> {
+    let opts = DbOptions::new(path.clone());
+    let mut db = BarqGraphDb::open(opts)
+        .with_context(|| format!("Failed to open database at {:?}", path))?;
+
+    let decision_path: Vec<u64> = serde_json::from_str(&decision_path_str)
+        .with_context(|| format!("Failed to parse decision path: {}", decision_path_str))?;
+
+    // Generate unique decision ID based on current count
+    let decision_id = db.decision_count() as u64 + 1;
+
+    let mut record = DecisionRecord::new(decision_id, agent_id, root, decision_path, score);
+    if let Some(n) = notes {
+        record = record.with_notes(n);
+    }
+
+    db.record_decision(record.clone())
+        .with_context(|| "Failed to record decision")?;
+
+    let output = json!({
+        "status": "ok",
+        "decision": {
+            "id": record.id,
+            "agent_id": record.agent_id,
+            "root_node": record.root_node,
+            "path": record.path,
+            "score": record.score,
+            "created_at": record.created_at,
+            "notes": record.notes
+        }
+    });
+    println!("{}", serde_json::to_string_pretty(&output)?);
+
+    Ok(())
+}
+
+/// Lists decisions for an agent.
+fn list_decisions(path: PathBuf, agent_id: u64) -> Result<()> {
+    let opts = DbOptions::new(path.clone());
+    let db = BarqGraphDb::open(opts)
+        .with_context(|| format!("Failed to open database at {:?}", path))?;
+
+    let decisions = db.list_decisions_for_agent(agent_id);
+
+    let output = json!({
+        "decisions": decisions.iter().map(|d| {
+            json!({
+                "id": d.id,
+                "agent_id": d.agent_id,
+                "root_node": d.root_node,
+                "path": d.path,
+                "score": d.score,
+                "created_at": d.created_at,
+                "notes": d.notes
             })
         }).collect::<Vec<_>>()
     });
