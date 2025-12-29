@@ -14,3 +14,9 @@ Thumbs.db
 # Test databases
 /test_db/
 *.db
+
+# SDK build artifacts
+sdk/nodejs/node_modules/
+sdk/nodejs/dist/
+sdk/csharp/**/bin/
+sdk/csharp/**/obj/
