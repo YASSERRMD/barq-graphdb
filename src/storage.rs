@@ -42,6 +42,8 @@ pub struct DbOptions {
     pub path: PathBuf,
     /// Type of vector index to use.
     pub index_type: IndexType,
+    /// Whether to flush WAL to disk after every write.
+    pub sync_writes: bool,
 }
 
 impl DbOptions {
@@ -57,7 +59,8 @@ impl DbOptions {
     pub fn new(path: PathBuf) -> Self {
         Self { 
             path,
-            index_type: IndexType::Hnsw, 
+            index_type: IndexType::Hnsw,
+            sync_writes: true, 
         }
     }
 }
@@ -286,7 +289,9 @@ impl BarqGraphDb {
         writeln!(self.wal, "{}", json).with_context(|| "Failed to write node to WAL")?;
 
         // Flush to ensure durability
-        self.wal.flush().with_context(|| "Failed to flush WAL")?;
+        if self.options.sync_writes {
+            self.wal.flush().with_context(|| "Failed to flush WAL")?;
+        }
 
         // Rebuild adjacency from node edges
         for edge in &node.edges {
@@ -385,7 +390,9 @@ impl BarqGraphDb {
         writeln!(self.wal, "{}", json).with_context(|| "Failed to write edge to WAL")?;
 
         // Flush to ensure durability
-        self.wal.flush().with_context(|| "Failed to flush WAL")?;
+        if self.options.sync_writes {
+            self.wal.flush().with_context(|| "Failed to flush WAL")?;
+        }
 
         // Update adjacency list
         self.adjacency.entry(from).or_default().push(to);
@@ -522,7 +529,9 @@ impl BarqGraphDb {
         writeln!(self.wal, "{}", json).with_context(|| "Failed to write embedding to WAL")?;
 
         // Flush to ensure durability
-        self.wal.flush().with_context(|| "Failed to flush WAL")?;
+        if self.options.sync_writes {
+            self.wal.flush().with_context(|| "Failed to flush WAL")?;
+        }
 
         // Update vector index
         self.vector_index.insert(id, &embedding);
