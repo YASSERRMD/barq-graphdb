@@ -21,6 +21,7 @@
 //! ```
 
 pub mod agent;
+pub mod api;
 pub mod error;
 pub mod graph;
 pub mod hybrid;
