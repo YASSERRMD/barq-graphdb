@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "barq-graphdb"
+version = "0.1.0"
+description = "Python SDK for Barq-GraphDB - A graph+vector database for AI agents"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "YASSERRMD", email = "yasser@example.com"}
+]
+keywords = ["graph", "vector", "database", "ai", "agents", "sdk"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.25.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/YASSERRMD/barq-graphdb"
+Repository = "https://github.com/YASSERRMD/barq-graphdb"
+Documentation = "https://github.com/YASSERRMD/barq-graphdb#readme"
+Issues = "https://github.com/YASSERRMD/barq-graphdb/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["barq_graphdb*"]
