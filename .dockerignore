@@ -1,0 +1,8 @@
+target/
+.git/
+.github/
+docs/
+test_db/
+fastembed_cache/
+*.DS_Store
+*.swp
