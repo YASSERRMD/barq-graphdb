@@ -32,7 +32,7 @@ rand = "0.8"
 [dev-dependencies]
 tempfile = "3"
 reqwest = { version = "0.12", features = ["json"] }
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 fastembed = "5.5.0"
 
 [[bench]]
@@ -57,4 +57,8 @@ harness = false
 
 [[bench]]
 name = "real_model_suite"
+harness = false
+
+[[bench]]
+name = "http_latency"
 harness = false
