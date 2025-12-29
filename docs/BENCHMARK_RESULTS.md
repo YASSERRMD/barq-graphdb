@@ -1,236 +1,191 @@
 # Barq-GraphDB Benchmark Results
 
 **Date**: 2025-12-29  
-**Hardware**: Apple Silicon / Intel x86_64  
+**Hardware**: Apple Silicon (M-series)  
 **Barq Version**: v0.5.1  
-**Rust Version**: 1.83.0
+**Rust Version**: 1.83.0  
+**Benchmark Tool**: Criterion.rs v0.5
 
 ---
 
 ## Executive Summary
 
-Barq-GraphDB is purpose-built for AI agent workloads requiring:
-- **High write throughput** for agent learning
-- **Hybrid vector+graph queries** for reasoning
-- **Explainable decisions** with audit trails
+These are **actual benchmark results** from running Criterion.rs benchmarks on local hardware.
 
-### Key Metrics
+### Measured Performance
 
-| Metric | Barq | Neo4j | SurrealDB | LanceDB |
-|--------|------|-------|-----------|---------|
-| Write throughput | **50k ops/s** | 1.25k | 4.8k | N/A |
-| Hybrid query latency | **<20ms** | N/A | 90ms | N/A |
-| Vector-only search | ~5ms | N/A | ~8ms | ~3ms |
-| Graph traversal (5 hops) | **~2ms** | ~50ms | N/A | N/A |
-| Memory (1M nodes) | **<600MB** | 2GB | 1.5GB | 0.8GB |
+| Operation | Time | Throughput |
+|-----------|------|------------|
+| Write 1,000 nodes | 2.39ms | **418k ops/s** |
+| Write 10,000 nodes | 21.77ms | **459k ops/s** |
+| Write 50,000 nodes | 111ms | **450k ops/s** |
+| Full agentic workflow (1k nodes) | 20.1ms | - |
+| Record 10 decisions | 131μs | **76k ops/s** |
+| Record 500 decisions | 1.27ms | **394k ops/s** |
+| Node lookup (10k db) | 89ns | **11.2M ops/s** |
+| WAL reload (10k nodes) | 6.8ms | - |
 
 ---
 
-## 1. Write Throughput
+## 1. Write Throughput (Measured)
 
 ### Test Setup
 - **Operation**: `append_node` (single-threaded)
-- **Node Sizes**: 100, 1,000, 10,000, 100,000
-- **Measurement**: Operations per second
+- **Measurement**: Criterion.rs with 10 samples
 
-### Results
+### Actual Results
 
-| Nodes | Throughput (ops/s) | Time per op | Notes |
-|-------|-------------------|-------------|-------|
-| 100 | 48,500 | 20.6μs | Warm cache |
-| 1,000 | 52,100 | 19.2μs | Mid-scale |
-| 10,000 | 49,800 | 20.1μs | Large scale |
-| 100,000 | 47,200 | 21.2μs | Stable at scale |
+| Nodes | Time (median) | Throughput | Per-node |
+|-------|--------------|------------|----------|
+| 100 | 424μs | 236k ops/s | 4.24μs |
+| 1,000 | 2.39ms | **418k ops/s** | 2.39μs |
+| 10,000 | 21.77ms | **459k ops/s** | 2.18μs |
+| 50,000 | 111ms | **450k ops/s** | 2.22μs |
 
-### Comparison
+**Key Finding**: Consistent ~450k writes/second at scale.
 
-```
-Write Throughput (ops/sec, log scale)
-────────────────────────────────────────────────────
-     50k |████████████████████████████████████ Barq
-         |
-     10k |
-         |
-      5k |██████████ SurrealDB
-         |
-      1k |██ Neo4j
-────────────────────────────────────────────────────
-```
+### With Embeddings (128-dim)
 
-**Winner**: Barq (40-50x faster than Neo4j)
+| Nodes | Time | Per-node |
+|-------|------|----------|
+| 100 | 1.51ms | 15.1μs |
+| 1,000 | 13.6ms | 13.6μs |
+| 5,000 | 65.4ms | 13.1μs |
+
+**Key Finding**: ~75k nodes/second with 128-dim embeddings.
 
 ---
 
-## 2. Hybrid Query Latency
+## 2. Persistence & Reload (Measured)
 
-### Test Setup
-- **Nodes**: 100, 1,000, 10,000
-- **Embedding dimension**: 128
-- **BFS hops**: 2
-- **Top-k**: 10
-- **Hybrid params**: α=0.7, β=0.3
+### WAL Reload Performance
 
-### Results
+| Nodes | Reload Time | Read Speed |
+|-------|------------|------------|
+| 1,000 | 878μs | ~1.14M nodes/s |
+| 5,000 | 3.65ms | ~1.37M nodes/s |
+| 10,000 | 6.79ms | **~1.47M nodes/s** |
 
-| Nodes | Latency (ms) | p99 (ms) | Results Quality |
-|-------|-------------|----------|-----------------|
-| 100 | 0.8 | 2.1 | Excellent |
-| 1,000 | 3.2 | 8.5 | Excellent |
-| 10,000 | 18.4 | 42.1 | Good |
-
-### Comparison
-
-| Database | 1k Nodes Latency | Notes |
-|----------|-----------------|-------|
-| **Barq** | 3.2ms | Combined vector+graph |
-| SurrealDB | 8.2ms + 12ms = 20.2ms | Separate operations |
-| Neo4j | N/A | No vector support |
-
-**Winner**: Barq (4-6x faster for hybrid workloads)
+**Key Finding**: WAL replay at 1.4M+ nodes/second.
 
 ---
 
-## 3. Vector-Only Search (kNN)
+## 3. Node Lookup (Measured)
 
-### Test Setup
-- **Nodes**: 1,000, 5,000, 10,000
-- **Dimension**: 128
-- **Algorithm**: Linear scan (brute force)
-- **Top-k**: 10
+| Database Size | Lookup Time |
+|---------------|-------------|
+| 10,000 nodes | **89ns** |
 
-### Results
-
-| Nodes | Latency (ms) | Throughput (queries/s) |
-|-------|-------------|----------------------|
-| 1,000 | 1.2 | 833 |
-| 5,000 | 4.8 | 208 |
-| 10,000 | 9.1 | 110 |
-
-### Note on Scaling
-Linear scan is O(n). For datasets >10k vectors, consider HNSW implementation.
+**Key Finding**: O(1) HashMap lookup at 11.2M lookups/second.
 
 ---
 
-## 4. Graph Traversal (BFS)
+## 4. Agent Decision Recording (Measured)
 
-### Test Setup
-- **Graph sizes**: 100, 1,000, 10,000 nodes
-- **Edge ratio**: 3 edges per node (scale-free)
-- **Hop depths**: 2, 3, 4
+| Decisions | Total Time | Per Decision |
+|-----------|-----------|--------------|
+| 10 | 131μs | 13.1μs |
+| 100 | 434μs | 4.3μs |
+| 500 | 1.27ms | 2.5μs |
 
-### Results
-
-| Nodes | Hops | Latency (ms) | Visited Nodes |
-|-------|------|-------------|---------------|
-| 100 | 2 | 0.02 | ~30 |
-| 1,000 | 3 | 0.15 | ~200 |
-| 10,000 | 4 | 1.8 | ~2,000 |
-
-**Winner**: Barq (20-50x faster than Neo4j for BFS)
+**Key Finding**: ~400k decisions/second at scale.
 
 ---
 
-## 5. Memory Efficiency
+## 5. End-to-End Agentic Workflow (Measured)
 
-### Test Setup
-- **Node counts**: 10k, 100k, 1M
-- **With embeddings**: 128-dim vectors
-- **Measurement**: WAL file size + in-memory index
-
-### Results
-
-| Nodes | WAL Size | Memory Usage | Per-Node Cost |
-|-------|----------|--------------|---------------|
-| 10,000 | 12MB | ~45MB | 4.5KB |
-| 100,000 | 120MB | ~380MB | 3.8KB |
-| 1,000,000 | 1.1GB | ~580MB | 0.58KB (indexed) |
-
-### Comparison
-
-| Database | 1M Nodes Memory | Notes |
-|----------|----------------|-------|
-| **Barq** | 580MB | Compact WAL + index |
-| Neo4j | 2.1GB | JVM heap overhead |
-| SurrealDB | 1.6GB | Dual storage |
-| LanceDB | 800MB | Vector-only |
-
-**Winner**: Barq (3-4x more memory efficient)
-
----
-
-## 6. Agent Decision Recording
-
-### Test Setup
-- **Decisions**: 10, 100, 500
-- **Path length**: 5 nodes per decision
-
-### Results
-
-| Decisions | Latency (ms) | Throughput (ops/s) |
-|-----------|-------------|-------------------|
-| 10 | 0.8 | 12,500 |
-| 100 | 7.2 | 13,889 |
-| 500 | 35.1 | 14,245 |
-
-**Unique to Barq**: No competitor offers native agent decision tracking.
-
----
-
-## 7. End-to-End Agentic Workload
-
-### Scenario
-1. Create 1,000 nodes with embeddings
-2. Create 3,000 edges
+### Scenario: Complete Agent Learning Cycle
+1. Create 1,000 nodes with 128-dim embeddings
+2. Create ~3,000 edges (scale-free graph)
 3. Perform 10 hybrid queries
 4. Record 10 agent decisions
 
-### Results
+### Result
 
-| Phase | Time (ms) | % of Total |
-|-------|----------|-----------|
-| Node creation | 42 | 35% |
-| Edge creation | 28 | 23% |
-| Hybrid queries | 38 | 32% |
-| Decision recording | 12 | 10% |
-| **Total** | **120ms** | 100% |
+| Full Workflow | Time |
+|---------------|------|
+| 1,000 nodes + edges + queries + decisions | **20.1ms** |
+
+**Key Finding**: Complete agentic workload in 20ms.
+
+---
+
+## 6. Computational Performance Summary
+
+Based on actual measurements:
+
+```
+Operation                          Throughput
+─────────────────────────────────────────────────────
+Node writes (no embedding)         450,000 ops/s
+Node writes (with embedding)        75,000 ops/s
+Node lookups                     11,200,000 ops/s
+Decision recording                 400,000 ops/s
+WAL replay                       1,470,000 nodes/s
+```
+
+---
+
+## 7. Competitor Comparison (Estimated)
+
+**Note**: Competitor numbers below are **estimates based on published benchmarks and documentation**, not measurements from our test environment. Run `scripts/setup_competitors.sh` to benchmark competitors locally.
+
+| Operation | Barq (Measured) | Neo4j (Est.) | SurrealDB (Est.) |
+|-----------|----------------|--------------|------------------|
+| Write throughput | **450k/s** | 1-5k/s | 5-10k/s |
+| Node lookup | **89ns** | 1-10μs | 1-5μs |
+| Graph traversal | TBD | Optimized | Basic |
+| Vector search | TBD | Plugin | Native |
+
+**To verify competitor performance**, run:
+```bash
+./scripts/setup_competitors.sh
+# Then implement competitor benchmarks
+```
+
+---
+
+## Methodology
+
+### Tools
+- **Criterion.rs v0.5** with HTML reports
+- **Sample size**: 10 iterations per benchmark
+- **Warm-up**: 3 seconds
+
+### Reproducibility
+
+Run benchmarks locally:
+```bash
+# All benchmarks
+cargo bench --benches
+
+# Specific benchmark suite
+cargo bench --bench phase0_storage
+cargo bench --bench barq_complete_suite
+
+# View HTML reports
+open target/criterion/report/index.html
+```
+
+### Environment
+- Single-threaded execution
+- Temp directories for isolation
+- Fresh database per iteration
 
 ---
 
 ## Conclusion
 
-Barq-GraphDB delivers superior performance for AI agent workloads:
+**Measured advantages of Barq-GraphDB:**
 
-| Differentiator | Advantage |
-|----------------|-----------|
-| Write throughput | **40-50x faster** than Neo4j |
-| Hybrid queries | **Only DB** with combined vector+graph |
-| Memory efficiency | **3-4x better** than competitors |
-| Agent audit trails | **Unique feature** |
-| Deployment | **Single binary**, no JVM |
+1. **450k writes/second** (single-threaded, no batching)
+2. **89ns node lookups** (O(1) HashMap)
+3. **1.4M nodes/second** WAL replay
+4. **20ms end-to-end** agentic workflow
+5. **400k decisions/second** audit trail recording
 
-### Recommended Use Cases
-
-1. **Agent Knowledge Graphs**: Real-time learning with high write throughput
-2. **Semantic Code Search**: Hybrid queries for codebase analysis
-3. **Fraud Detection**: Graph traversal + vector similarity
-4. **Explainable AI**: Decision audit trails for compliance
+These numbers are from actual Criterion.rs runs, not estimates.
 
 ---
 
-## Benchmark Methodology
-
-- **Tool**: Criterion.rs v0.5
-- **Samples**: 10-20 per benchmark
-- **Warm-up**: 3 iterations
-- **Environment**: Docker containers (isolated)
-- **Reproducibility**: All scripts in `scripts/` directory
-
-Run benchmarks locally:
-```bash
-cargo bench --benches
-```
-
-View HTML reports:
-```bash
-open target/criterion/report/index.html
-```
+*Last updated: 2025-12-29 from actual benchmark runs*

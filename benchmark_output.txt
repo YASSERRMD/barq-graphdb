@@ -1,0 +1,120 @@
+   Compiling barq_graphdb v0.0.1 (/Users/mdyasser/Documents/projects/barq-graphdb)
+    Finished `bench` profile [optimized] target(s) in 8.57s
+     Running unittests src/lib.rs (target/release/deps/barq_graphdb-b257990dfe8ebc22)
+
+running 41 tests
+test agent::tests::test_decision_record_creation ... ignored
+test agent::tests::test_decision_record_serialization ... ignored
+test agent::tests::test_decision_record_with_notes ... ignored
+test agent::tests::test_decision_record_with_timestamp ... ignored
+test bench_utils::tests::test_generate_linear_chain ... ignored
+test bench_utils::tests::test_generate_random_nodes ... ignored
+test bench_utils::tests::test_generate_scale_free_edges ... ignored
+test bench_utils::tests::test_generate_tree ... ignored
+test graph::tests::test_add_edge_creates_nodes ... ignored
+test graph::tests::test_bfs_isolated_node ... ignored
+test graph::tests::test_bfs_nonexistent_start ... ignored
+test graph::tests::test_bfs_simple_chain ... ignored
+test graph::tests::test_bfs_tree_structure ... ignored
+test graph::tests::test_bfs_with_cycle ... ignored
+test graph::tests::test_neighbors ... ignored
+test graph::tests::test_new_graph_is_empty ... ignored
+test hybrid::tests::test_default_params ... ignored
+test hybrid::tests::test_hybrid_result_creation ... ignored
+test hybrid::tests::test_hybrid_score_alpha_only ... ignored
+test hybrid::tests::test_hybrid_score_beta_only ... ignored
+test hybrid::tests::test_hybrid_score_capped_vector ... ignored
+test hybrid::tests::test_hybrid_score_far_graph ... ignored
+test hybrid::tests::test_hybrid_score_far_vector ... ignored
+test hybrid::tests::test_hybrid_score_identical ... ignored
+test storage::tests::test_append_and_persist ... ignored
+test storage::tests::test_append_and_retrieve_node ... ignored
+test storage::tests::test_create_new_database ... ignored
+test storage::tests::test_multiple_nodes ... ignored
+test storage::tests::test_node_update_in_wal ... ignored
+test vector::tests::test_cosine_distance_orthogonal ... ignored
+test vector::tests::test_cosine_distance_parallel ... ignored
+test vector::tests::test_knn_empty_index ... ignored
+test vector::tests::test_knn_k_larger_than_dataset ... ignored
+test vector::tests::test_knn_ordering ... ignored
+test vector::tests::test_knn_simple ... ignored
+test vector::tests::test_l2_distance_identical ... ignored
+test vector::tests::test_l2_distance_simple ... ignored
+test vector::tests::test_l2_distance_single_dim ... ignored
+test vector::tests::test_linear_index_get ... ignored
+test vector::tests::test_linear_index_insert_and_contains ... ignored
+test vector::tests::test_linear_index_new ... ignored
+
+test result: ok. 0 passed; 0 failed; 41 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/barqg.rs (target/release/deps/barqg-c131c91b446be070)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/barqg_server.rs (target/release/deps/barqg_server-bb334832318e6b05)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/barq_complete_suite.rs (target/release/deps/barq_complete_suite-dd8169e98b582d12)
+Gnuplot not found, using plotters backend
+Benchmarking barq_write_scale/1000
+Benchmarking barq_write_scale/1000: Warming up for 3.0000 s
+Benchmarking barq_write_scale/1000: Collecting 10 samples in estimated 20.032 s (8030 iterations)
+Benchmarking barq_write_scale/1000: Analyzing
+barq_write_scale/1000   time:   [2.3325 ms 2.3937 ms 2.4509 ms]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking barq_write_scale/10000
+Benchmarking barq_write_scale/10000: Warming up for 3.0000 s
+Benchmarking barq_write_scale/10000: Collecting 10 samples in estimated 20.229 s (825 iterations)
+Benchmarking barq_write_scale/10000: Analyzing
+barq_write_scale/10000  time:   [21.418 ms 21.770 ms 22.121 ms]
+Benchmarking barq_write_scale/50000
+Benchmarking barq_write_scale/50000: Warming up for 3.0000 s
+Benchmarking barq_write_scale/50000: Collecting 10 samples in estimated 21.137 s (165 iterations)
+Benchmarking barq_write_scale/50000: Analyzing
+barq_write_scale/50000  time:   [109.17 ms 111.03 ms 113.78 ms]
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) high mild
+  1 (10.00%) high severe
+
+Benchmarking barq_agentic_workload/full_workflow_1k
+Benchmarking barq_agentic_workload/full_workflow_1k: Warming up for 3.0000 s
+Benchmarking barq_agentic_workload/full_workflow_1k: Collecting 10 samples in estimated 30.329 s (1485 iterations)
+Benchmarking barq_agentic_workload/full_workflow_1k: Analyzing
+barq_agentic_workload/full_workflow_1k
+                        time:   [19.952 ms 20.145 ms 20.468 ms]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+
+Benchmarking barq_decisions/10
+Benchmarking barq_decisions/10: Warming up for 3.0000 s
+Benchmarking barq_decisions/10: Collecting 10 samples in estimated 5.0063 s (24k iterations)
+Benchmarking barq_decisions/10: Analyzing
+barq_decisions/10       time:   [127.60 µs 131.16 µs 133.79 µs]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) low mild
+Benchmarking barq_decisions/100
+Benchmarking barq_decisions/100: Warming up for 3.0000 s
+Benchmarking barq_decisions/100: Collecting 10 samples in estimated 5.0211 s (10k iterations)
+Benchmarking barq_decisions/100: Analyzing
+barq_decisions/100      time:   [389.43 µs 434.31 µs 523.79 µs]
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high severe
+Benchmarking barq_decisions/500
+Benchmarking barq_decisions/500: Warming up for 3.0000 s
+Benchmarking barq_decisions/500: Collecting 10 samples in estimated 5.0285 s (3575 iterations)
+Benchmarking barq_decisions/500: Analyzing
+barq_decisions/500      time:   [1.2600 ms 1.2659 ms 1.2782 ms]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+
+
+thread 'main' (13425810) panicked at /Users/mdyasser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/criterion-0.5.1/src/benchmark_group.rs:98:9:
+assertion failed: n >= 10
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: bench failed, to rerun pass `--bench barq_complete_suite`
