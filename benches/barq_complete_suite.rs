@@ -118,8 +118,8 @@ fn barq_decision_recording(c: &mut Criterion) {
 /// Memory efficiency benchmark (measures WAL size).
 fn barq_memory_efficiency(c: &mut Criterion) {
     let mut group = c.benchmark_group("barq_memory");
-    group.measurement_time(Duration::from_secs(30));
-    group.sample_size(5);
+    group.measurement_time(Duration::from_secs(60));
+    group.sample_size(10);
 
     for nodes in [10000, 50000].iter() {
         group.bench_with_input(
