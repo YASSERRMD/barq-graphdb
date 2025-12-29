@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # Neo4j - Graph Database
+  neo4j:
+    image: neo4j:5-community
+    container_name: benchmark-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/password123
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474" # HTTP
+      - "7687:7687" # Bolt
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:7474" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # SurrealDB - Multi-model Database
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    container_name: benchmark-surrealdb
+    command: start --log trace --user root --pass root file:/data/surreal.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - surreal_data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL with pgvector
+  pgvector:
+    image: ankane/pgvector:latest
+    container_name: benchmark-pgvector
+    environment:
+      POSTGRES_USER: benchmark
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: benchmark
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U benchmark" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Barq-GraphDB (our server)
+  barqg:
+    build: .
+    container_name: benchmark-barqg
+    ports:
+      - "3000:3000"
+    volumes:
+      - barqg_data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  neo4j_data:
+  surreal_data:
+  pgvector_data:
+  barqg_data:
