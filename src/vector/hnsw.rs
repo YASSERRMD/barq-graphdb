@@ -59,9 +59,9 @@ impl VectorIndex for HnswVectorIndex {
     }
 
     fn knn(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32)> {
-        // Increased ef_search for better recall
-        let ef_search = 100.max(k);
-        let fetch_k = k * 5;
+        // Increased ef_search and fetch_k to handle stale entries from append-only updates (soft deletes)
+        let ef_search = 200.max(k * 2);
+        let fetch_k = (k * 20).max(100); // Fetch more candidates to filter out stale ones
 
         // HNSW search is thread-safe
         let results = self.index.search(query, fetch_k, ef_search);
