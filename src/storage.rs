@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
+use std::sync::{Arc, mpsc::{self, Sender}};
+use std::thread;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -44,6 +46,8 @@ pub struct DbOptions {
     pub index_type: IndexType,
     /// Whether to flush WAL to disk after every write.
     pub sync_writes: bool,
+    /// Whether to update vector index asynchronously.
+    pub async_indexing: bool,
 }
 
 impl DbOptions {
@@ -61,6 +65,7 @@ impl DbOptions {
             path,
             index_type: IndexType::Hnsw,
             sync_writes: true, 
+            async_indexing: false, // Default to synchronous for consistency
         }
     }
 }
@@ -101,7 +106,9 @@ pub struct BarqGraphDb {
     /// Adjacency list for graph traversal.
     adjacency: HashMap<NodeId, Vec<NodeId>>,
     /// Vector index for similarity search.
-    vector_index: Box<dyn VectorIndex>,
+    vector_index: Arc<dyn VectorIndex>,
+    /// Channel for async index updates.
+    index_tx: Option<Sender<(NodeId, Vec<f32>)>>,
     /// Agent decision records.
     decisions: Vec<DecisionRecord>,
 }
@@ -151,9 +158,10 @@ impl BarqGraphDb {
         };
 
         // Build vector index based on configuration
-        let mut vector_index: Box<dyn VectorIndex> = match opts.index_type {
-            IndexType::Linear => Box::new(LinearVectorIndex::new()),
-            IndexType::Hnsw => Box::new(HnswVectorIndex::new(1_000_000)),
+        // Build vector index based on configuration
+        let vector_index: Arc<dyn VectorIndex> = match opts.index_type {
+            IndexType::Linear => Arc::new(LinearVectorIndex::new()),
+            IndexType::Hnsw => Arc::new(HnswVectorIndex::new(1_000_000)),
         };
         for (id, embedding) in &vectors {
             vector_index.insert(*id, embedding);
@@ -164,6 +172,21 @@ impl BarqGraphDb {
                 vector_index.insert(*id, &node.embedding);
             }
         }
+
+        // Setup async thread if enabled
+        let index_tx = if opts.async_indexing {
+            let (tx, rx) = mpsc::channel::<(NodeId, Vec<f32>)>();
+            let index_clone = vector_index.clone();
+            
+            thread::spawn(move || {
+                while let Ok((id, embedding)) = rx.recv() {
+                    index_clone.insert(id, &embedding);
+                }
+            });
+            Some(tx)
+        } else {
+            None
+        };
 
         // Open WAL file for appending
         let wal = OpenOptions::new()
@@ -178,6 +201,7 @@ impl BarqGraphDb {
             nodes,
             adjacency,
             vector_index,
+            index_tx,
             decisions,
         })
     }
@@ -301,7 +325,11 @@ impl BarqGraphDb {
 
         // Add embedding to vector index if present
         if !node.embedding.is_empty() {
-            self.vector_index.insert(node.id, &node.embedding);
+             if let Some(tx) = &self.index_tx {
+                 let _ = tx.send((node.id, node.embedding.clone()));
+             } else {
+                 self.vector_index.insert(node.id, &node.embedding);
+             }
         }
 
         // Update in-memory index
@@ -534,7 +562,11 @@ impl BarqGraphDb {
         }
 
         // Update vector index
-        self.vector_index.insert(id, &embedding);
+        if let Some(tx) = &self.index_tx {
+            let _ = tx.send((id, embedding.clone()));
+        } else {
+            self.vector_index.insert(id, &embedding);
+        }
 
         // Update node if it exists
         if let Some(node) = self.nodes.get_mut(&id) {

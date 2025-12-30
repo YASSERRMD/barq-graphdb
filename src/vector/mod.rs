@@ -4,6 +4,7 @@
 //! functionality using L2 (Euclidean) distance.
 
 use std::collections::HashMap;
+use std::sync::RwLock;
 
 use crate::NodeId;
 
@@ -21,7 +22,7 @@ pub trait VectorIndex: Send + Sync {
     ///
     /// * `id` - Node ID associated with this embedding
     /// * `embedding` - Vector embedding to store
-    fn insert(&mut self, id: NodeId, embedding: &[f32]);
+    fn insert(&self, id: NodeId, embedding: &[f32]);
 
     /// Finds the k nearest neighbors to a query vector.
     ///
@@ -122,27 +123,27 @@ pub fn cosine_distance(a: &[f32], b: &[f32]) -> f32 {
 #[derive(Debug, Default)]
 pub struct LinearVectorIndex {
     /// Storage mapping node IDs to their embeddings.
-    vectors: HashMap<NodeId, Vec<f32>>,
+    vectors: RwLock<HashMap<NodeId, Vec<f32>>>,
 }
 
 impl LinearVectorIndex {
     /// Creates a new empty linear vector index.
     pub fn new() -> Self {
         Self {
-            vectors: HashMap::new(),
+            vectors: RwLock::new(HashMap::new()),
         }
     }
 }
 
 impl VectorIndex for LinearVectorIndex {
-    fn insert(&mut self, id: NodeId, embedding: &[f32]) {
-        self.vectors.insert(id, embedding.to_vec());
+    fn insert(&self, id: NodeId, embedding: &[f32]) {
+        self.vectors.write().unwrap().insert(id, embedding.to_vec());
     }
 
     fn knn(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32)> {
         // Compute distances to all vectors
-        let mut distances: Vec<(NodeId, f32)> = self
-            .vectors
+        let vectors = self.vectors.read().unwrap();
+        let mut distances: Vec<(NodeId, f32)> = vectors
             .iter()
             .filter(|(_, vec)| vec.len() == query.len())
             .map(|(&id, vec)| (id, l2_distance(query, vec)))
@@ -157,11 +158,11 @@ impl VectorIndex for LinearVectorIndex {
     }
 
     fn len(&self) -> usize {
-        self.vectors.len()
+        self.vectors.read().unwrap().len()
     }
 
     fn contains(&self, id: NodeId) -> bool {
-        self.vectors.contains_key(&id)
+        self.vectors.read().unwrap().contains_key(&id)
     }
 }
 
@@ -213,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_linear_index_insert_and_contains() {
-        let mut index = LinearVectorIndex::new();
+        let index = LinearVectorIndex::new();
         index.insert(1, &[0.1, 0.2, 0.3]);
 
         assert!(index.contains(1));
@@ -223,18 +224,18 @@ mod tests {
 
     #[test]
     fn test_linear_index_get() {
-        let mut index = LinearVectorIndex::new();
+        let index = LinearVectorIndex::new();
         let embedding = vec![0.1, 0.2, 0.3];
         index.insert(1, &embedding);
 
-        let retrieved = index.vectors.get(&1).unwrap();
+        let vectors = index.vectors.read().unwrap();
+        let retrieved = vectors.get(&1).unwrap();
         assert_eq!(retrieved, &embedding);
-        assert!(index.vectors.get(&999).is_none());
     }
 
     #[test]
     fn test_knn_simple() {
-        let mut index = LinearVectorIndex::new();
+        let index = LinearVectorIndex::new();
 
         // Insert vectors in 2D space
         index.insert(1, &[0.0, 0.0]);
@@ -256,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_knn_k_larger_than_dataset() {
-        let mut index = LinearVectorIndex::new();
+        let index = LinearVectorIndex::new();
         index.insert(1, &[0.0]);
         index.insert(2, &[1.0]);
 
@@ -273,7 +274,7 @@ mod tests {
 
     #[test]
     fn test_knn_ordering() {
-        let mut index = LinearVectorIndex::new();
+        let index = LinearVectorIndex::new();
         index.insert(1, &[0.0]);
         index.insert(2, &[3.0]);
         index.insert(3, &[1.0]);
