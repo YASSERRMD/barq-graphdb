@@ -4,10 +4,12 @@ FROM rust:1.83-slim-bookworm AS builder
 WORKDIR /app
 
 # Install dependencies
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y pkg-config libssl-dev protobuf-compiler && rm -rf /var/lib/apt/lists/*
 
 # Copy source
 COPY Cargo.toml Cargo.lock ./
+COPY build.rs ./
+COPY proto ./proto
 COPY src ./src
 COPY tests ./tests
 COPY benches ./benches
