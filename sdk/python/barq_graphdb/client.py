@@ -9,6 +9,14 @@ import requests
 
 from .models import Node, Edge, Decision, HybridResult, HybridParams, Stats
 
+try:
+    import grpc
+    from .proto import barq_pb2, barq_pb2_grpc
+    GRPC_AVAILABLE = True
+except ImportError:
+    GRPC_AVAILABLE = False
+    grpc = None
+
 
 class BarqError(Exception):
     """Exception raised for Barq-GraphDB API errors."""
@@ -29,16 +37,27 @@ class BarqClient:
         >>> nodes = client.list_nodes()
     """
     
-    def __init__(self, base_url: str = "http://localhost:3000", timeout: int = 30):
+    def __init__(self, base_url: str = "http://localhost:3000", grpc_address: str = "localhost:50051", use_grpc: bool = False, timeout: int = 30):
         """
         Initialize the Barq-GraphDB client.
         
         Args:
-            base_url: Base URL of the Barq-GraphDB server.
+            base_url: Base URL of the Barq-GraphDB server (HTTP).
+            grpc_address: Address of the gRPC server (e.g. "localhost:50051").
+            use_grpc: Whether to use gRPC for supported operations.
             timeout: Request timeout in seconds.
         """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.use_grpc = use_grpc
+        self.grpc_address = grpc_address
+        
+        if self.use_grpc:
+            if not GRPC_AVAILABLE:
+                raise ImportError("gRPC libraries not found or protos not generated. Install 'grpcio' and run codegen.")
+            self._channel = grpc.insecure_channel(self.grpc_address)
+            self._stub = barq_pb2_grpc.BarqServiceStub(self._channel)
+
         self._session = requests.Session()
         self._session.headers.update({
             "Content-Type": "application/json",
@@ -98,6 +117,21 @@ class BarqClient:
         Returns:
             The created node's ID.
         """
+
+        if self.use_grpc:
+            try:
+                props = {k: str(v) for k, v in node.properties.items()} if node.properties else {}
+                proto_node = barq_pb2.NodeProto(
+                    id=node.id,
+                    label=node.label,
+                    properties=props
+                )
+                req = barq_pb2.CreateNodeRequest(node=proto_node)
+                resp = self._stub.CreateNode(req)
+                return resp.node.id
+            except grpc.RpcError as e:
+                raise BarqError(f"gRPC error: {e.details()}", status_code=500)
+
         data = self._request("POST", "/nodes", json=node.to_dict())
         return data.get("node_id", node.id)
 
@@ -143,6 +177,18 @@ class BarqClient:
             node_id: ID of the node.
             embedding: Vector embedding.
         """
+
+        if self.use_grpc:
+            try:
+                req = barq_pb2.SetEmbeddingRequest(
+                    id=node_id,
+                    embedding=embedding
+                )
+                self._stub.SetEmbedding(req)
+                return
+            except grpc.RpcError as e:
+                raise BarqError(f"gRPC error: {e.details()}", status_code=500)
+
         self._request("POST", "/embeddings", json={
             "id": node_id,
             "embedding": embedding,

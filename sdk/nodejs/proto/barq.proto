@@ -1,0 +1,54 @@
+syntax = "proto3";
+package barq;
+
+service BarqService {
+  rpc HealthCheck (Empty) returns (HealthCheckResponse);
+  rpc CreateNode (NodeProto) returns (Result);
+  rpc GetNode (NodeIdProto) returns (NodeProto);
+  rpc CreateEdge (EdgeProto) returns (Result);
+  rpc SetEmbedding (EmbeddingProto) returns (Result);
+  rpc HybridQuery (HybridQueryRequest) returns (HybridQueryResponse);
+}
+
+message Empty {}
+message Result { bool success = 1; string error = 2; }
+message HealthCheckResponse { string status = 1; string version = 2; }
+
+message NodeIdProto { uint64 id = 1; }
+
+message NodeProto {
+  uint64 id = 1;
+  string label = 2;
+  repeated float embedding = 3;
+  repeated EdgeProto edges = 4;
+}
+
+message EdgeProto {
+  uint64 from = 1;
+  uint64 to = 2;
+  string type = 3;
+}
+
+message EmbeddingProto {
+  uint64 id = 1;
+  repeated float vec = 2;
+}
+
+message HybridQueryRequest {
+  repeated float query_embedding = 1;
+  uint64 start_node = 2;
+  uint32 max_hops = 3;
+  uint32 k = 4;
+  float alpha = 5;
+  float beta = 6;
+}
+
+message HybridResultProto {
+  uint64 id = 1;
+  float score = 2;
+  repeated uint64 path = 3;
+}
+
+message HybridQueryResponse {
+  repeated HybridResultProto results = 1;
+}

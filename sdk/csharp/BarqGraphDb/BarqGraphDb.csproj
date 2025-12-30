@@ -15,6 +15,16 @@
 
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="8.0.0" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.60.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.25.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.60.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos\barq.proto" GrpcServices="Client" />
   </ItemGroup>
 
 </Project>
