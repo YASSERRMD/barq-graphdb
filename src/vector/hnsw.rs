@@ -22,8 +22,9 @@ pub struct HnswVectorIndex {
 impl HnswVectorIndex {
     /// Creates a new HNSW index.
     pub fn new(max_elements: usize) -> Self {
-        let max_nb_connection = 16; // M
-        let ef_construction = 200; // build quality
+        // Increased M and ef_construction to improve recall on small datasets and stability
+        let max_nb_connection = 32; // M
+        let ef_construction = 400; // build quality
 
         let index = Hnsw::new(
             max_nb_connection,
@@ -58,7 +59,8 @@ impl VectorIndex for HnswVectorIndex {
     }
 
     fn knn(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32)> {
-        let ef_search = 50.max(k);
+        // Increased ef_search for better recall
+        let ef_search = 100.max(k);
         let fetch_k = k * 5;
 
         // HNSW search is thread-safe
