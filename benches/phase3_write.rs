@@ -24,7 +24,8 @@ fn benchmark_write_ops(c: &mut Criterion) {
                 let dir = TempDir::new().unwrap();
                 let mut opts = DbOptions::new(dir.path().to_path_buf());
                 opts.index_type = IndexType::Hnsw;
-                opts.sync_writes = false; // Critical for throughput
+                opts.sync_writes = false; // Bypass disk
+                opts.async_indexing = true; // Bypass sync HNSW insert
                 
                 let mut db = BarqGraphDb::open(opts).unwrap();
                 let nodes_data = generate_random_nodes(s, 128);
