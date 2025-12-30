@@ -107,6 +107,14 @@ See each SDK's README for detailed usage examples.
 ./target/release/barqg hybrid --path ./my_database --start 1 --hops 3 --k 5 --vec '[0.1,0.2,0.3]' --alpha 0.7 --beta 0.3
 ```
 
+## 📊 Benchmarks
+
+See [Full Benchmark Results](docs/BENCHMARK_RESULTS.md) and [Competitive Analysis](docs/COMPETITIVE_ANALYSIS.md).
+
+- **Write**: ~28,000 vectors/sec (Async Indexing)
+- **Search**: < 1ms Latency (HNSW Hybrid)
+- **Lookup**: 89ns / op
+
 ## HTTP API
 
 Start the server:
@@ -208,8 +216,9 @@ fn main() -> anyhow::Result<()> {
 
 ### Vector Index
 
-- **Linear Scan**: Brute-force kNN suitable for datasets under 10,000 vectors
-- **L2 Distance**: Euclidean distance metric for similarity comparison
+- **HNSW Index**: Hierarchical Navigable Small World graph for O(log N) similarity search
+- **Linear Scan**: Fallback for small datasets (configurable)
+- **L2 Distance**: Euclidean distance metric
 
 ### Hybrid Scoring
 
@@ -224,7 +233,7 @@ score = alpha * (1 - normalized_vector_distance) + beta * (1 / (1 + graph_distan
 
 ## Agent Decision Tracking
 
-Record and audit AI agent decisions:
+Record and audit AI agents:
 
 ```rust
 use barq_graphdb::agent::DecisionRecord;
@@ -288,13 +297,12 @@ barq-graphdb/
 - **Node Lookups**: O(1) via HashMap
 - **Neighbor Access**: O(1) via adjacency lists
 - **BFS Traversal**: O(V + E) where V = visited nodes, E = edges
-- **kNN Search**: O(n) linear scan (suitable for n < 10,000)
-- **WAL Writes**: O(1) append operation
+- **kNN Search**: O(log n) HNSW search (sub-ms at scale)
+- **WAL Writes**: Async vector indexing ensures non-blocking writes
 
 ## Limitations
 
-- Vector index uses linear scan; for larger datasets, consider HNSW implementation
-- Single-threaded write path; reads are concurrent via Mutex
+- Single-process architecture (embedded or sidecar)
 - No built-in clustering or sharding
 
 ## License
