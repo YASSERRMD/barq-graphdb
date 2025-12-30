@@ -22,9 +22,12 @@
 
 pub mod agent;
 pub mod api;
+pub mod batch_indexer;
+pub mod batch_queue;
 pub mod bench_utils;
 pub mod error;
 pub mod graph;
+pub mod grpc;
 pub mod hybrid;
 pub mod storage;
 pub mod vector;

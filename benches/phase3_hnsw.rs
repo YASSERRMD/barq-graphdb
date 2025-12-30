@@ -10,7 +10,7 @@ use tempfile::TempDir;
 fn benchmark_hnsw_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("phase3_hnsw_comparison");
     group.sample_size(10); // Adjust based on runtime
-    
+
     // Testing sizes: 2k, 5k, 10k, 50k
     // Note: 50k might be slow for Linear, so reduce iterations if needed
     let sizes = [2000, 5000, 10000, 50000];
@@ -21,7 +21,7 @@ fn benchmark_hnsw_comparison(c: &mut Criterion) {
             let dir = TempDir::new().unwrap();
             let mut opts = DbOptions::new(dir.path().to_path_buf());
             opts.index_type = IndexType::Linear;
-            
+
             let mut db = BarqGraphDb::open(opts).unwrap();
             let nodes_data = generate_random_nodes(s, 128);
             for node in nodes_data {
@@ -42,7 +42,7 @@ fn benchmark_hnsw_comparison(c: &mut Criterion) {
             let dir = TempDir::new().unwrap();
             let mut opts = DbOptions::new(dir.path().to_path_buf());
             opts.index_type = IndexType::Hnsw;
-            
+
             let mut db = BarqGraphDb::open(opts).unwrap();
             let nodes_data = generate_random_nodes(s, 128);
             for node in nodes_data {
@@ -58,7 +58,7 @@ fn benchmark_hnsw_comparison(c: &mut Criterion) {
             });
         });
     }
-    
+
     group.finish();
 }
 

@@ -31,7 +31,8 @@ COPY --from=builder /app/target/release/barqg_server /usr/local/bin/
 RUN mkdir -p /data
 
 # Expose server port
-EXPOSE 3000
+EXPOSE 8080
+EXPOSE 50051
 
 # Default command runs the server
-CMD ["barqg_server", "--path", "/data", "--host", "0.0.0.0", "--port", "3000"]
+CMD ["barqg_server", "--path", "/data", "--host", "0.0.0.0", "--port", "8080"]

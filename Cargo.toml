@@ -30,6 +30,12 @@ axum = "0.7"
 rand = "0.8"
 hnsw_rs = "0.3"
 dashmap = "5.5"
+tonic = "0.10"
+prost = "0.12"
+tokio-stream = "0.1"
+
+[build-dependencies]
+tonic-build = "0.10"
 
 [dev-dependencies]
 tempfile = "3"

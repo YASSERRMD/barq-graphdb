@@ -13,8 +13,10 @@ use axum::{
 use clap::Parser;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
+use tonic::transport::Server;
 
 use barq_graphdb::api;
+use barq_graphdb::grpc;
 use barq_graphdb::storage::{BarqGraphDb, DbOptions};
 
 /// Barq-GraphDB HTTP Server.
@@ -31,9 +33,13 @@ struct Args {
     #[arg(long, default_value = "127.0.0.1")]
     host: String,
 
-    /// Port to listen on.
-    #[arg(long, default_value = "3000")]
+    /// Port to listen on (HTTP).
+    #[arg(long, default_value = "8080")]
     port: u16,
+
+    /// Port to listen on (gRPC).
+    #[arg(long, default_value = "50051")]
+    grpc_port: u16,
 }
 
 #[tokio::main]
@@ -51,6 +57,24 @@ async fn main() {
     };
 
     let state = Arc::new(Mutex::new(db));
+
+    // Spawn gRPC server
+    let grpc_addr = format!("{}:{}", args.host, args.grpc_port)
+        .parse()
+        .expect("Invalid gRPC address");
+    let grpc_state = state.clone();
+
+    println!("Barq-GraphDB gRPC server starting on grpc://{}", grpc_addr);
+    tokio::spawn(async move {
+        let service = grpc::MyBarqService::new(grpc_state);
+        Server::builder()
+            .add_service(grpc::barq_rpc::barq_service_server::BarqServiceServer::new(
+                service,
+            ))
+            .serve(grpc_addr)
+            .await
+            .expect("gRPC server failed");
+    });
 
     // Build router with all endpoints
     let app = Router::new()

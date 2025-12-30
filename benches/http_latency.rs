@@ -1,14 +1,17 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use barq_graphdb::{api, storage::{BarqGraphDb, DbOptions}};
 use axum::{
     routing::{get, post},
     Router,
 };
+use barq_graphdb::{
+    api,
+    storage::{BarqGraphDb, DbOptions},
+};
+use criterion::{criterion_group, criterion_main, Criterion};
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::net::TcpListener;
-use tempfile::TempDir;
 use std::time::Duration;
+use tempfile::TempDir;
+use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 
 async fn start_test_server() -> (String, TempDir) {
     let dir = TempDir::new().unwrap();
@@ -62,11 +65,7 @@ fn benchmark_http_latency(c: &mut Criterion) {
                         "label": "Benchmark Node",
                         "embedding": vec![0.0; 128] // Include embedding overhead
                     });
-                    let _res = client.post(&url)
-                        .json(&body)
-                        .send()
-                        .await
-                        .unwrap();
+                    let _res = client.post(&url).json(&body).send().await.unwrap();
                 }
                 start.elapsed()
             }
@@ -82,7 +81,8 @@ fn benchmark_http_latency(c: &mut Criterion) {
             "label": "Get Target",
             "embedding": vec![1.0; 128]
         });
-        client.post(&format!("{}/nodes", base_url))
+        client
+            .post(&format!("{}/nodes", base_url))
             .json(&body)
             .send()
             .await
@@ -101,9 +101,9 @@ fn benchmark_http_latency(c: &mut Criterion) {
     // 4. Benchmark Health Check (Baseline overhead)
     group.bench_function("get_health", |b| {
         b.to_async(&rt).iter(|| async {
-             let url = format!("{}/health", base_url);
-             let res = client.get(&url).send().await.unwrap();
-             assert!(res.status().is_success());
+            let url = format!("{}/health", base_url);
+            let res = client.get(&url).send().await.unwrap();
+            assert!(res.status().is_success());
         });
     });
 

@@ -2,8 +2,8 @@ use dashmap::DashMap;
 use hnsw_rs::prelude::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::NodeId;
 use super::VectorIndex;
+use crate::NodeId;
 
 /// HNSW-based vector index implementation.
 /// Uses logical-to-physical ID mapping to support updates via append-only strategy.
@@ -23,16 +23,16 @@ impl HnswVectorIndex {
     /// Creates a new HNSW index.
     pub fn new(max_elements: usize) -> Self {
         let max_nb_connection = 16; // M
-        let ef_construction = 200;  // build quality
-        
+        let ef_construction = 200; // build quality
+
         let index = Hnsw::new(
-            max_nb_connection, 
-            max_elements, 
+            max_nb_connection,
+            max_elements,
             16, // max_layer
             ef_construction,
-            DistL2 {}
+            DistL2 {},
         );
-        
+
         Self {
             index,
             node_to_internal: DashMap::new(),
@@ -45,7 +45,7 @@ impl HnswVectorIndex {
 impl VectorIndex for HnswVectorIndex {
     fn insert(&self, id: NodeId, embedding: &[f32]) {
         // Assign a new internal ID atomically
-        // Relaxed ordering is fine as unique IDs matters, strict time ordering is loose in distrib DBs, 
+        // Relaxed ordering is fine as unique IDs matters, strict time ordering is loose in distrib DBs,
         // but SeqCst is safer for logic if needed. Relaxed is enough for counter.
         let internal_id = self.next_internal_id.fetch_add(1, Ordering::Relaxed);
 
@@ -59,22 +59,22 @@ impl VectorIndex for HnswVectorIndex {
 
     fn knn(&self, query: &[f32], k: usize) -> Vec<(NodeId, f32)> {
         let ef_search = 50.max(k);
-        let fetch_k = k * 5; 
-        
+        let fetch_k = k * 5;
+
         // HNSW search is thread-safe
         let results = self.index.search(query, fetch_k, ef_search);
-        
+
         let mut final_results = Vec::with_capacity(k);
         // We use a small local set to dedup results for this query
         let mut seen_nodes = std::collections::HashSet::new();
 
         for neighbor in results {
             let internal_id = neighbor.d_id;
-            
+
             // Resolve logical ID using concurrent map
             if let Some(node_ref) = self.internal_to_node.get(&internal_id) {
                 let node_id = *node_ref.value();
-                
+
                 // Check if this internal ID is CURRENT
                 if let Some(current_ref) = self.node_to_internal.get(&node_id) {
                     if *current_ref.value() == internal_id {
@@ -89,7 +89,7 @@ impl VectorIndex for HnswVectorIndex {
                 }
             }
         }
-        
+
         final_results
     }
 
