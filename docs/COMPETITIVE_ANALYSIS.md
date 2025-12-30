@@ -4,6 +4,9 @@
 
 This document provides a detailed comparison between Barq-GraphDB and existing database solutions for AI agent workloads.
 
+## Benchmark Disclosure
+Barq-GraphDB metrics are derived from direct Criterion.rs benchmarks executed on local hardware. Comparative metrics for other databases are derived from publicly available benchmarks, published performance reports, and known architectural constraints. They are provided for directional comparison, not as controlled head-to-head benchmarks.
+
 ---
 
 ## Feature Matrix
@@ -41,7 +44,7 @@ This document provides a detailed comparison between Barq-GraphDB and existing d
 |----------|---------|-----------|
 | **Barq-GraphDB** | **~1.2 ms** | In-memory HNSW + Adjacency |
 | LanceDB | N/A | Vector only |
-| SurrealDB | ~205 ms | Vector Scan + Join |
+| SurrealDB | ~205 ms | Vector Scan + Join (Non-optimized) |
 | Neo4j | N/A | Graph only |
 
 **Barq advantage**: Only database with true sub-millisecond hybrid execution. Real-time reasoning capability.
