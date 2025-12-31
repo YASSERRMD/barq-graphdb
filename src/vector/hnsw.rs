@@ -51,7 +51,8 @@ impl VectorIndex for HnswVectorIndex {
         let internal_id = self.next_internal_id.fetch_add(1, Ordering::Relaxed);
 
         // Insert into HNSW (internal locking)
-        self.index.insert((embedding, internal_id));
+        let embedding_vec = embedding.to_vec();
+        self.index.insert((&embedding_vec, internal_id));
 
         // Update mappings (DashMap handles concurrency)
         self.node_to_internal.insert(id, internal_id);
