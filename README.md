@@ -23,11 +23,12 @@ Barq-GraphDB is a high-performance database that combines graph traversal capabi
 ### Key Features
 
 - **Graph Storage**: Directed graph with adjacency lists and BFS traversal
-- **Vector Index**: L2 distance-based similarity search with kNN queries
+- **Vector Index**: HNSW-based similarity search with kNN queries
 - **Hybrid Queries**: Combined vector similarity and graph distance scoring
 - **Agent Audit Trails**: Decision recording and replay for AI agent transparency
 - **Append-Only WAL**: Durable write-ahead log with crash recovery
-- **REST API**: JSON-based HTTP interface for all operations
+- **REST API**: JSON-based HTTP interface (port 8080)
+- **gRPC API**: High-performance binary protocol (port 50051)
 - **CLI Tool**: Command-line interface for database management
 
 ## Installation
@@ -50,10 +51,13 @@ After building, two binaries are available:
 ### Docker
 
 ```bash
-docker compose up -d
+docker pull yasserrmd/barq-graphdb:latest
+docker run -d -p 8080:8080 -p 50051:50051 yasserrmd/barq-graphdb
 ```
 
-The server will be available at `http://localhost:3000`.
+The server will be available at:
+- **HTTP API**: `http://localhost:8080`
+- **gRPC API**: `localhost:50051`
 
 ## Client SDKs
 
@@ -120,7 +124,7 @@ See [Full Benchmark Results](docs/BENCHMARK_RESULTS.md) and [Competitive Analysi
 Start the server:
 
 ```bash
-./target/release/barqg_server --path ./my_database --host 127.0.0.1 --port 3000
+./target/release/barqg_server --path ./my_database --host 127.0.0.1 --port 8080 --grpc-port 50051
 ```
 
 ### Endpoints
@@ -140,7 +144,7 @@ Start the server:
 ### Example: Create Node
 
 ```bash
-curl -X POST http://localhost:3000/nodes \
+curl -X POST http://localhost:8080/nodes \
   -H "Content-Type: application/json" \
   -d '{"id": 1, "label": "User", "embedding": [0.1, 0.2, 0.3]}'
 ```
@@ -148,7 +152,7 @@ curl -X POST http://localhost:3000/nodes \
 ### Example: Hybrid Query
 
 ```bash
-curl -X POST http://localhost:3000/query/hybrid \
+curl -X POST http://localhost:8080/query/hybrid \
   -H "Content-Type: application/json" \
   -d '{
     "start": 1,
